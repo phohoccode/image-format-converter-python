@@ -7,6 +7,7 @@ Công cụ chuyển đổi định dạng ảnh từ URL sang các định dạn
 - ✅ Chuyển đổi ảnh từ một URL
 - ✅ Chuyển đổi hàng loạt từ file chứa danh sách URL
 - ✅ **Chuyển đổi từ file JSON (movies format)** - Tự động đọc `slug` làm tên file, `poster` làm URL
+- ✅ **Checkpoint/Resume** 🆕 - Lưu tiến trình tự động, tiếp tục khi bị gián đoạn
 - ✅ **Progress bar thời gian thực** với tqdm - Hiển thị tiến độ, tốc độ, ETA
 - ✅ Hỗ trợ 8 định dạng: PNG, JPEG, JPG, WEBP, BMP, GIF, TIFF, ICO
 - ✅ Tùy chỉnh tên file đầu ra
@@ -15,6 +16,7 @@ Công cụ chuyển đổi định dạng ảnh từ URL sang các định dạn
 - ✅ **Nén WEBP tối ưu** - Quality 80%, method 6 cho kích thước nhỏ nhất
 - ✅ **So sánh dung lượng** trước và sau khi chuyển đổi
 - ✅ **Thống kê chi tiết** - Thành công, thất bại, bỏ qua
+- ✅ **Silent mode** - Không in log khi xử lý hàng loạt để progress bar đẹp hơn
 
 ## 📋 Yêu cầu
 
@@ -39,7 +41,8 @@ python main.py
 1. Chuyển đổi từ một URL
 2. Chuyển đổi từ file chứa danh sách URL
 3. Chuyển đổi từ file JSON (movies format)
-4. Thoát
+4. Xóa checkpoint (tiến trình đã lưu)
+5. Thoát
 ============================================================
 ```
 
@@ -183,6 +186,12 @@ Thư mục: ./webp-output
   - JPEG: Quality 85%, optimize=True
   - PNG: optimize=True
   - WEBP: Quality 80%, method=6 (nén tốt nhất), optimize=True
+- **Checkpoint/Resume System** 🆕:
+  - Tự động lưu tiến trình mỗi 10 ảnh/phim
+  - File checkpoint: `.image_converter_checkpoint.json`
+  - Phát hiện và hỏi resume khi chạy lại sau gián đoạn
+  - Xử lý Ctrl+C thông minh - lưu trước khi thoát
+  - Tự động xóa checkpoint khi hoàn thành
 - **Progress bar với tqdm**: Hiển thị tiến độ, tốc độ (ảnh/s hoặc phim/s), ETA
 - **Silent mode**: Tắt log chi tiết khi xử lý hàng loạt để progress bar đẹp hơn
 - **Xử lý lỗi thông minh**: Bắt lỗi và thông báo chi tiết, tự động bỏ qua lỗi và tiếp tục
@@ -203,13 +212,62 @@ Chương trình sẽ thông báo chi tiết khi gặp lỗi:
 
 ```text
 image-format-converter/
-├── main.py              # File chính chứa toàn bộ logic
-├── README.md            # Hướng dẫn sử dụng chi tiết
-├── requirements.txt     # Danh sách thư viện cần thiết
-├── urls-sample.txt             # File mẫu chứa danh sách URL
-├── movies.json          # File JSON chứa dữ liệu phim (nếu có)
-└── movies-sample.json   # File JSON mẫu để test
+├── main.py                          # File chính chứa toàn bộ logic
+├── README.md                        # Hướng dẫn sử dụng chi tiết
+├── requirements.txt                 # Danh sách thư viện cần thiết
+├── urls.txt                         # File mẫu chứa danh sách URL
+├── movies.json                      # File JSON chứa dữ liệu phim (nếu có)
+├── movies-sample.json               # File JSON mẫu để test
+└── .image_converter_checkpoint.json # Checkpoint (tự động tạo khi cần)
 ```
+
+## 🔄 Checkpoint/Resume - Tính năng mới
+
+### Cách hoạt động
+
+Khi xử lý hàng loạt (option 2 hoặc 3), tool tự động:
+
+1. **Lưu tiến trình mỗi 10 mục** vào file `.image_converter_checkpoint.json`
+2. **Khi bị gián đoạn** (Ctrl+C, crash, mất mạng):
+
+   ```text
+   ⚠️  Đã bị gián đoạn! Đang lưu tiến trình...
+   💾 Đã lưu tiến trình: 1250/25298 phim
+   ℹ️  Chạy lại và chọn 'Resume' để tiếp tục
+   ```
+
+3. **Khi chạy lại**, tự động phát hiện:
+
+   ```text
+   💾 Phát hiện tiến trình chưa hoàn thành!
+      File: movies.json
+      Đã xử lý: 1250 phim
+
+   Tiếp tục từ tiến trình cũ? (y/n):
+   ```
+
+4. **Khi hoàn thành** - Tự động xóa checkpoint
+
+### Xóa checkpoint thủ công
+
+Chọn **option 4** trong menu để xóa checkpoint:
+
+```text
+💾 Checkpoint hiện tại:
+   File: movies.json
+   Đã xử lý: 1250 mục
+   Định dạng: WEBP
+   Thư mục: ./posters
+
+⚠️  Xác nhận xóa checkpoint? (y/n):
+```
+
+### Lợi ích
+
+- ✅ **An toàn 100%** - Không lo mất công khi xử lý hàng nghìn ảnh
+- ✅ **Linh hoạt** - Dừng bất cứ lúc nào, tiếp tục sau
+- ✅ **Tự động** - Không cần làm gì, tool tự lo
+- ✅ **Thông minh** - Chỉ hỏi resume khi cần thiết
 
 ## 📊 Ví dụ thực tế
 

@@ -13,12 +13,46 @@ class ImageConverter:
     """Công cụ chuyển đổi định dạng ảnh từ URL"""
     
     SUPPORTED_FORMATS = ['PNG', 'JPEG', 'JPG', 'WEBP', 'BMP', 'GIF', 'TIFF', 'ICO']
+    CHECKPOINT_FILE = '.image_converter_checkpoint.json'
     
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+    
+    def save_checkpoint(self, file_path: str, processed_indices: list, output_format: str, output_dir: str):
+        """Lưu tiến trình hiện tại vào checkpoint file"""
+        checkpoint_data = {
+            'file_path': file_path,
+            'processed_indices': processed_indices,
+            'output_format': output_format,
+            'output_dir': output_dir,
+            'timestamp': json.dumps(None)  # Placeholder for timestamp
+        }
+        try:
+            with open(self.CHECKPOINT_FILE, 'w', encoding='utf-8') as f:
+                json.dump(checkpoint_data, f, indent=2)
+        except Exception as e:
+            print(f"⚠️  Không thể lưu checkpoint: {e}")
+    
+    def load_checkpoint(self) -> Optional[dict]:
+        """Đọc checkpoint nếu có"""
+        if os.path.exists(self.CHECKPOINT_FILE):
+            try:
+                with open(self.CHECKPOINT_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                return None
+        return None
+    
+    def clear_checkpoint(self):
+        """Xóa checkpoint file"""
+        try:
+            if os.path.exists(self.CHECKPOINT_FILE):
+                os.remove(self.CHECKPOINT_FILE)
+        except Exception:
+            pass
     
     def download_image(self, url: str, silent: bool = False) -> Optional[tuple[Image.Image, int]]:
         """Tải ảnh từ URL và trả về ảnh cùng với kích thước file gốc"""
@@ -35,10 +69,12 @@ class ImageConverter:
                 print(f"✅ Tải thành công! Kích thước: {image.size}, Định dạng: {image.format}, Dung lượng: {size_mb:.2f} MB ({original_size:,} bytes)")
             return image, original_size
         except requests.exceptions.RequestException as e:
-            print(f"❌ Lỗi khi tải ảnh: {e}")
+            if not silent:
+                print(f"❌ Lỗi khi tải ảnh: {e}")
             return None, 0
         except Exception as e:
-            print(f"❌ Lỗi khi xử lý ảnh: {e}")
+            if not silent:
+                print(f"❌ Lỗi khi xử lý ảnh: {e}")
             return None, 0
     
     def convert_image(self, image: Image.Image, output_format: str) -> Optional[Image.Image]:
@@ -68,7 +104,7 @@ class ImageConverter:
             
             return image
         except Exception as e:
-            print(f"❌ Lỗi khi chuyển đổi ảnh: {e}")
+            # Không in error để tránh rối progress bar
             return None
     
     def save_image(self, image: Image.Image, output_path: str, output_format: str, silent: bool = False) -> bool:
@@ -103,7 +139,8 @@ class ImageConverter:
                 print(f"📦 Dung lượng file: {size_mb:.2f} MB ({saved_size:,} bytes)")
             return True
         except Exception as e:
-            print(f"❌ Lỗi khi lưu ảnh: {e}")
+            if not silent:
+                print(f"❌ Lỗi khi lưu ảnh: {e}")
             return False
     
     def process_url(self, url: str, output_format: str, output_dir: str, custom_name: Optional[str] = None, silent: bool = False) -> bool:
@@ -151,8 +188,8 @@ class ImageConverter:
         
         return success
     
-    def process_urls_from_file(self, file_path: str, output_format: str, output_dir: str) -> tuple:
-        """Xử lý nhiều URL từ file"""
+    def process_urls_from_file(self, file_path: str, output_format: str, output_dir: str, resume: bool = False) -> tuple:
+        """Xử lý nhiều URL từ file với hỗ trợ checkpoint"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 urls = [line.strip() for line in f if line.strip() and not line.startswith('#')]
@@ -161,28 +198,62 @@ class ImageConverter:
                 print("❌ File không chứa URL nào!")
                 return 0, 0
             
-            print(f"\n📋 Tìm thấy {len(urls)} URL trong file")
-            success_count = 0
-            fail_count = 0
+            # Kiểm tra resume checkpoint
+            processed_indices = []
+            start_index = 0
+            if resume:
+                checkpoint = self.load_checkpoint()
+                if checkpoint and checkpoint.get('file_path') == file_path:
+                    processed_indices = checkpoint.get('processed_indices', [])
+                    start_index = len(processed_indices)
+                    print(f"\n🔄 Tiếp tục từ ảnh thứ {start_index + 1}/{len(urls)}")
             
-            # Sử dụng tqdm để hiển thị progress bar
-            with tqdm(total=len(urls), desc="🔄 Đang chuyển đổi", unit="ảnh", ncols=100, colour='cyan') as pbar:
-                for url in urls:
-                    if self.process_url(url, output_format, output_dir, silent=True):
-                        success_count += 1
-                    else:
-                        fail_count += 1
-                    pbar.update(1)
+            print(f"\n📋 Tìm thấy {len(urls)} URL trong file")
+            if start_index > 0:
+                print(f"⏭️  Đã xử lý: {start_index} ảnh")
+            
+            success_count = len([i for i in processed_indices if i >= 0])
+            fail_count = len([i for i in processed_indices if i < 0])
+            
+            try:
+                # Sử dụng tqdm để hiển thị progress bar
+                with tqdm(total=len(urls), initial=start_index, desc="🔄 Đang chuyển đổi", unit="ảnh", ncols=100, colour='cyan') as pbar:
+                    for idx in range(start_index, len(urls)):
+                        url = urls[idx]
+                        if self.process_url(url, output_format, output_dir, silent=True):
+                            success_count += 1
+                            processed_indices.append(idx)
+                        else:
+                            fail_count += 1
+                            processed_indices.append(-idx)  # Số âm đánh dấu failed
+                        
+                        # Lưu checkpoint mỗi 10 ảnh
+                        if (idx + 1) % 10 == 0:
+                            self.save_checkpoint(file_path, processed_indices, output_format, output_dir)
+                        
+                        pbar.update(1)
+                
+                # Hoàn thành - xóa checkpoint
+                self.clear_checkpoint()
+                
+            except KeyboardInterrupt:
+                print("\n\n⚠️  Đã bị gián đoạn! Đang lưu tiến trình...")
+                self.save_checkpoint(file_path, processed_indices, output_format, output_dir)
+                print(f"💾 Đã lưu tiến trình: {len(processed_indices)}/{len(urls)} ảnh")
+                print(f"ℹ️  Chạy lại và chọn 'Resume' để tiếp tục")
+                raise
             
             return success_count, fail_count
         except FileNotFoundError:
             print(f"❌ Không tìm thấy file: {file_path}")
             return 0, 0
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             print(f"❌ Lỗi khi đọc file: {e}")
             return 0, 0
     
-    def process_movies_json(self, file_path: str, output_format: str, output_dir: str) -> tuple:
+    def process_movies_json(self, file_path: str, output_format: str, output_dir: str, resume: bool = False) -> tuple:
         """Xử lý file JSON với định dạng movies (slug làm tên, poster làm URL)"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -190,54 +261,99 @@ class ImageConverter:
             
             if not movies:
                 print("❌ File JSON không chứa dữ liệu!")
-                return 0, 0
+                return 0, 0, 0
             
             if not isinstance(movies, list):
                 print("❌ File JSON phải là một mảng các object!")
-                return 0, 0
+                return 0, 0, 0
+            
+            # Kiểm tra resume checkpoint
+            processed_indices = []
+            start_index = 0
+            if resume:
+                checkpoint = self.load_checkpoint()
+                if checkpoint and checkpoint.get('file_path') == file_path:
+                    processed_indices = checkpoint.get('processed_indices', [])
+                    start_index = len(processed_indices)
+                    print(f"\n🔄 Tiếp tục từ phim thứ {start_index + 1}/{len(movies)}")
             
             print(f"\n📋 Tìm thấy {len(movies)} bộ phim trong file")
+            if start_index > 0:
+                print(f"⏭️  Đã xử lý: {start_index} phim")
+            
             success_count = 0
             fail_count = 0
             skipped_count = 0
             
-            # Sử dụng tqdm để hiển thị progress bar
-            with tqdm(total=len(movies), desc="🎬 Đang chuyển đổi poster", unit="phim", ncols=100, colour='green') as pbar:
-                for movie in movies:
-                    # Kiểm tra có trường poster và slug không
-                    if 'poster' not in movie or 'slug' not in movie:
-                        skipped_count += 1
-                        pbar.update(1)
-                        continue
-                    
-                    poster_url = movie['poster']
-                    slug = movie['slug']
-                    
-                    # Bỏ qua nếu URL hoặc slug trống
-                    if not poster_url or not slug:
-                        skipped_count += 1
-                        pbar.update(1)
-                        continue
-                    
-                    # Xử lý chuyển đổi (không in log chi tiết để không làm rối progress bar)
-                    result = self.download_image(poster_url, silent=True)
-                    if result[0]:
-                        image, original_size = result
-                        converted_image = self.convert_image(image, output_format)
-                        if converted_image:
-                            filename = f"{slug}.{output_format.lower()}"
-                            output_path = os.path.join(output_dir, filename)
-                            
-                            if self.save_image(converted_image, output_path, output_format, silent=True):
-                                success_count += 1
+            # Đếm lại từ processed_indices
+            for idx in processed_indices:
+                if idx >= 0:
+                    success_count += 1
+                elif idx == -999999:  # Đánh dấu skipped
+                    skipped_count += 1
+                else:
+                    fail_count += 1
+            
+            try:
+                # Sử dụng tqdm để hiển thị progress bar
+                with tqdm(total=len(movies), initial=start_index, desc="🎬 Đang chuyển đổi poster", unit="phim", ncols=100, colour='green') as pbar:
+                    for idx in range(start_index, len(movies)):
+                        movie = movies[idx]
+                        
+                        # Kiểm tra có trường poster và slug không
+                        if 'poster' not in movie or 'slug' not in movie:
+                            skipped_count += 1
+                            processed_indices.append(-999999)  # Đánh dấu skipped
+                            pbar.update(1)
+                            continue
+                        
+                        poster_url = movie['poster']
+                        slug = movie['slug']
+                        
+                        # Bỏ qua nếu URL hoặc slug trống
+                        if not poster_url or not slug:
+                            skipped_count += 1
+                            processed_indices.append(-999999)
+                            pbar.update(1)
+                            continue
+                        
+                        # Xử lý chuyển đổi (không in log chi tiết để không làm rối progress bar)
+                        result = self.download_image(poster_url, silent=True)
+                        if result[0]:
+                            image, original_size = result
+                            converted_image = self.convert_image(image, output_format)
+                            if converted_image:
+                                filename = f"{slug}.{output_format.lower()}"
+                                output_path = os.path.join(output_dir, filename)
+                                
+                                if self.save_image(converted_image, output_path, output_format, silent=True):
+                                    success_count += 1
+                                    processed_indices.append(idx)
+                                else:
+                                    fail_count += 1
+                                    processed_indices.append(-idx)
                             else:
                                 fail_count += 1
+                                processed_indices.append(-idx)
                         else:
                             fail_count += 1
-                    else:
-                        fail_count += 1
-                    
-                    pbar.update(1)
+                            processed_indices.append(-idx)
+                        
+                        # Lưu checkpoint mỗi 10 phim
+                        if (idx + 1) % 10 == 0:
+                            self.save_checkpoint(file_path, processed_indices, output_format, output_dir)
+                        
+                        pbar.update(1)
+                
+                # Hoàn thành - xóa checkpoint
+                self.clear_checkpoint()
+                
+            except KeyboardInterrupt:
+                print("\n\n⚠️  Đã bị gián đoạn! Đang lưu tiến trình...")
+                self.save_checkpoint(file_path, processed_indices, output_format, output_dir)
+                print(f"💾 Đã lưu tiến trình: {len(processed_indices)}/{len(movies)} phim")
+                print(f"ℹ️  Chạy lại và chọn 'Resume' để tiếp tục")
+                raise
             
             return success_count, fail_count, skipped_count
         except FileNotFoundError:
@@ -259,7 +375,8 @@ def display_menu():
     print("1. Chuyển đổi từ một URL")
     print("2. Chuyển đổi từ file chứa danh sách URL")
     print("3. Chuyển đổi từ file JSON (movies format)")
-    print("4. Thoát")
+    print("4. Xóa checkpoint (tiến trình đã lưu)")
+    print("5. Thoát")
     print("="*60)
 
 
@@ -323,20 +440,40 @@ def process_single_url(converter: ImageConverter):
 
 def process_file_urls(converter: ImageConverter):
     """Xử lý chuyển đổi từ file chứa danh sách URL"""
-    file_path = input("\n📄 Nhập đường dẫn file chứa URL: ").strip()
-    if not file_path:
-        print("❌ Đường dẫn file không hợp lệ!")
-        return
+    # Kiểm tra checkpoint
+    resume = False
+    checkpoint = converter.load_checkpoint()
+    if checkpoint:
+        print("\n💾 Phát hiện tiến trình chưa hoàn thành!")
+        print(f"   File: {checkpoint.get('file_path')}")
+        print(f"   Đã xử lý: {len(checkpoint.get('processed_indices', []))} ảnh")
+        resume_choice = input("\nTiếp tục từ tiến trình cũ? (y/n): ").strip().lower()
+        if resume_choice == 'y':
+            resume = True
+            file_path = checkpoint.get('file_path')
+            output_format = checkpoint.get('output_format')
+            output_dir = checkpoint.get('output_dir')
+        else:
+            converter.clear_checkpoint()
     
-    if not os.path.exists(file_path):
-        print(f"❌ File không tồn tại: {file_path}")
-        return
-    
-    output_format = get_output_format(converter)
-    output_dir = get_output_directory()
+    if not resume:
+        file_path = input("\n📄 Nhập đường dẫn file chứa URL: ").strip()
+        if not file_path:
+            print("❌ Đường dẫn file không hợp lệ!")
+            return
+        
+        if not os.path.exists(file_path):
+            print(f"❌ File không tồn tại: {file_path}")
+            return
+        
+        output_format = get_output_format(converter)
+        output_dir = get_output_directory()
     
     print("\n🚀 Bắt đầu chuyển đổi...")
-    success, fail = converter.process_urls_from_file(file_path, output_format, output_dir)
+    try:
+        success, fail = converter.process_urls_from_file(file_path, output_format, output_dir, resume=resume)
+    except KeyboardInterrupt:
+        return
     
     print(f"\n{'='*60}")
     print(f"📊 KẾT QUẢ:")
@@ -346,22 +483,63 @@ def process_file_urls(converter: ImageConverter):
     print(f"{'='*60}")
 
 
+def clear_checkpoint_menu(converter: ImageConverter):
+    """Xóa checkpoint đã lưu"""
+    checkpoint = converter.load_checkpoint()
+    if not checkpoint:
+        print("\nℹ️  Không có checkpoint nào được lưu.")
+        return
+    
+    print("\n💾 Checkpoint hiện tại:")
+    print(f"   File: {checkpoint.get('file_path')}")
+    print(f"   Đã xử lý: {len(checkpoint.get('processed_indices', []))} mục")
+    print(f"   Định dạng: {checkpoint.get('output_format')}")
+    print(f"   Thư mục: {checkpoint.get('output_dir')}")
+    
+    confirm = input("\n⚠️  Xác nhận xóa checkpoint? (y/n): ").strip().lower()
+    if confirm == 'y':
+        converter.clear_checkpoint()
+        print("✅ Đã xóa checkpoint thành công!")
+    else:
+        print("❌ Đã hủy xóa checkpoint.")
+
+
 def process_movies_json(converter: ImageConverter):
     """Xử lý chuyển đổi từ file JSON movies"""
-    file_path = input("\n📄 Nhập đường dẫn file JSON: ").strip()
-    if not file_path:
-        print("❌ Đường dẫn file không hợp lệ!")
-        return
+    # Kiểm tra checkpoint
+    resume = False
+    checkpoint = converter.load_checkpoint()
+    if checkpoint:
+        print("\n💾 Phát hiện tiến trình chưa hoàn thành!")
+        print(f"   File: {checkpoint.get('file_path')}")
+        print(f"   Đã xử lý: {len(checkpoint.get('processed_indices', []))} phim")
+        resume_choice = input("\nTiếp tục từ tiến trình cũ? (y/n): ").strip().lower()
+        if resume_choice == 'y':
+            resume = True
+            file_path = checkpoint.get('file_path')
+            output_format = checkpoint.get('output_format')
+            output_dir = checkpoint.get('output_dir')
+        else:
+            converter.clear_checkpoint()
     
-    if not os.path.exists(file_path):
-        print(f"❌ File không tồn tại: {file_path}")
-        return
-    
-    output_format = get_output_format(converter)
-    output_dir = get_output_directory()
+    if not resume:
+        file_path = input("\n📄 Nhập đường dẫn file JSON: ").strip()
+        if not file_path:
+            print("❌ Đường dẫn file không hợp lệ!")
+            return
+        
+        if not os.path.exists(file_path):
+            print(f"❌ File không tồn tại: {file_path}")
+            return
+        
+        output_format = get_output_format(converter)
+        output_dir = get_output_directory()
     
     print("\n🚀 Bắt đầu chuyển đổi...")
-    success, fail, skipped = converter.process_movies_json(file_path, output_format, output_dir)
+    try:
+        success, fail, skipped = converter.process_movies_json(file_path, output_format, output_dir, resume=resume)
+    except KeyboardInterrupt:
+        return
     
     print(f"\n{'='*60}")
     print(f"📊 KẾT QUẢ:")
@@ -379,7 +557,7 @@ def main():
     while True:
         try:
             display_menu()
-            choice = input("Chọn chức năng (1-4): ").strip()
+            choice = input("Chọn chức năng (1-5): ").strip()
             
             if choice == '1':
                 process_single_url(converter)
@@ -388,6 +566,8 @@ def main():
             elif choice == '3':
                 process_movies_json(converter)
             elif choice == '4':
+                clear_checkpoint_menu(converter)
+            elif choice == '5':
                 print("\n👋 Tạm biệt!")
                 sys.exit(0)
             else:
