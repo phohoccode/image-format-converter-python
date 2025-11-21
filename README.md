@@ -7,7 +7,8 @@ Công cụ chuyển đổi định dạng ảnh từ URL sang các định dạn
 - ✅ Chuyển đổi ảnh từ một URL
 - ✅ Chuyển đổi hàng loạt từ file chứa danh sách URL
 - ✅ **Chuyển đổi từ file JSON (movies format)** - Tự động đọc `slug` làm tên file, `poster` làm URL
-- ✅ **Checkpoint/Resume** 🆕 - Lưu tiến trình tự động, tiếp tục khi bị gián đoạn
+- ✅ **Tự động phát hiện file JSON trong thư mục mock** 🆕 - Hiển thị danh sách file có sẵn để chọn nhanh
+- ✅ **Checkpoint/Resume** - Lưu tiến trình tự động, tiếp tục khi bị gián đoạn
 - ✅ **Progress bar thời gian thực** với tqdm - Hiển thị tiến độ, tốc độ, ETA
 - ✅ Hỗ trợ 8 định dạng: PNG, JPEG, JPG, WEBP, BMP, GIF, TIFF, ICO
 - ✅ Tùy chỉnh tên file đầu ra
@@ -122,7 +123,18 @@ Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON.
 **Các bước:**
 
 - Chọn option 3 trong menu
-- Nhập đường dẫn file: `movies.json`
+- **Tự động hiển thị danh sách file JSON** trong thư mục `mock` (nếu có):
+
+  ```text
+  📁 Tìm thấy các file JSON trong thư mục mock:
+     1. movies_posters.json (150.25 KB)
+     2. movies_thumbs.json (98.50 KB)
+     3. Nhập đường dẫn khác
+
+  Chọn file (1-3):
+  ```
+
+- Chọn file từ danh sách hoặc nhập đường dẫn tùy chỉnh: `movies.json`
 - Chọn định dạng đầu ra (khuyến nghị WEBP cho web)
 - Nhập thư mục lưu file: `./posters`
 
@@ -140,6 +152,8 @@ Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON.
 
 **Đặc điểm:**
 
+- **Tự động phát hiện thư mục `mock`** - Hiển thị danh sách file JSON có sẵn để chọn nhanh
+- **Hiển thị thông tin file** - Tên file và kích thước (KB) để dễ lựa chọn
 - File đầu ra tự động lấy tên từ trường `slug`: `avatar-the-way-of-water.webp`
 - URL lấy từ trường `poster`
 - Tự động bỏ qua các bản ghi thiếu `slug` hoặc `poster`
@@ -215,9 +229,11 @@ image-format-converter/
 ├── main.py                          # File chính chứa toàn bộ logic
 ├── README.md                        # Hướng dẫn sử dụng chi tiết
 ├── requirements.txt                 # Danh sách thư viện cần thiết
-├── urls.txt                         # File mẫu chứa danh sách URL
-├── movies.json                      # File JSON chứa dữ liệu phim (nếu có)
+├── urls-sample.txt                  # File mẫu chứa danh sách URL
 ├── movies-sample.json               # File JSON mẫu để test
+├── mock/                            # Thư mục chứa file JSON (tùy chọn)
+│   ├── movies_posters.json          # File JSON poster phim
+│   └── movies_thumbs.json           # File JSON thumbnail phim
 └── .image_converter_checkpoint.json # Checkpoint (tự động tạo khi cần)
 ```
 
@@ -312,11 +328,13 @@ Chọn **option 4** trong menu để xóa checkpoint:
    - Xử lý hàng ngàn poster cùng lúc
    - Tên file tự động từ slug, dễ quản lý
    - Progress bar giúp theo dõi tiến độ
+   - Tạo thư mục `mock/` để lưu các file JSON, tool sẽ tự động phát hiện và hiển thị
 
 5. **Tips khác**:
    - Thêm **#** ở đầu dòng trong file URL để comment
    - Tạo thư mục riêng cho từng định dạng: `./webp`, `./jpeg`
    - Kiểm tra kết quả với vài ảnh trước khi xử lý hàng loạt
+   - Đặt các file JSON vào thư mục `mock/` để chọn nhanh khi sử dụng option 3
 
 ## 🚀 Performance
 

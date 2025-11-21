@@ -523,14 +523,67 @@ def process_movies_json(converter: ImageConverter):
             converter.clear_checkpoint()
     
     if not resume:
-        file_path = input("\n📄 Nhập đường dẫn file JSON: ").strip()
-        if not file_path:
-            print("❌ Đường dẫn file không hợp lệ!")
-            return
+        # Kiểm tra thư mục mock và hiển thị các file JSON có sẵn
+        mock_dir = "mock"
+        json_files = []
         
-        if not os.path.exists(file_path):
-            print(f"❌ File không tồn tại: {file_path}")
-            return
+        if os.path.exists(mock_dir) and os.path.isdir(mock_dir):
+            json_files = [f for f in os.listdir(mock_dir) if f.endswith('.json')]
+            
+            if json_files:
+                print("\n📁 Tìm thấy các file JSON trong thư mục mock:")
+                for i, filename in enumerate(json_files, 1):
+                    file_path_display = os.path.join(mock_dir, filename)
+                    file_size = os.path.getsize(file_path_display)
+                    size_kb = file_size / 1024
+                    print(f"   {i}. {filename} ({size_kb:.2f} KB)")
+                
+                print(f"   {len(json_files) + 1}. Nhập đường dẫn khác")
+                
+                while True:
+                    try:
+                        choice = input(f"\nChọn file (1-{len(json_files) + 1}): ").strip()
+                        choice_idx = int(choice) - 1
+                        
+                        if 0 <= choice_idx < len(json_files):
+                            file_path = os.path.join(mock_dir, json_files[choice_idx])
+                            print(f"✅ Đã chọn: {file_path}")
+                            break
+                        elif choice_idx == len(json_files):
+                            # Người dùng chọn nhập đường dẫn khác
+                            file_path = input("\n📄 Nhập đường dẫn file JSON: ").strip()
+                            if not file_path:
+                                print("❌ Đường dẫn file không hợp lệ!")
+                                return
+                            
+                            if not os.path.exists(file_path):
+                                print(f"❌ File không tồn tại: {file_path}")
+                                return
+                            break
+                        else:
+                            print(f"❌ Vui lòng chọn số từ 1 đến {len(json_files) + 1}")
+                    except ValueError:
+                        print("❌ Vui lòng nhập số hợp lệ!")
+            else:
+                # Thư mục mock tồn tại nhưng không có file JSON
+                file_path = input("\n📄 Nhập đường dẫn file JSON: ").strip()
+                if not file_path:
+                    print("❌ Đường dẫn file không hợp lệ!")
+                    return
+                
+                if not os.path.exists(file_path):
+                    print(f"❌ File không tồn tại: {file_path}")
+                    return
+        else:
+            # Thư mục mock không tồn tại
+            file_path = input("\n📄 Nhập đường dẫn file JSON: ").strip()
+            if not file_path:
+                print("❌ Đường dẫn file không hợp lệ!")
+                return
+            
+            if not os.path.exists(file_path):
+                print(f"❌ File không tồn tại: {file_path}")
+                return
         
         output_format = get_output_format(converter)
         output_dir = get_output_directory()
