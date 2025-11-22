@@ -1,31 +1,33 @@
-# 🖼️ Image Format Converter
+# Image Format Converter
 
 Công cụ chuyển đổi định dạng ảnh từ URL sang các định dạng khác nhau bằng Python với giao diện terminal thân thiện và progress bar đẹp mắt.
 
-## ✨ Tính năng
+## Tính năng
 
-- ✅ Chuyển đổi ảnh từ một URL
-- ✅ Chuyển đổi hàng loạt từ file chứa danh sách URL
-- ✅ **Chuyển đổi từ file JSON (movies format)** - Tự động đọc `slug` làm tên file, `poster` làm URL
-- ✅ **Tự động phát hiện file JSON trong thư mục mock** 🆕 - Hiển thị danh sách file có sẵn để chọn nhanh
-- ✅ **Checkpoint/Resume** - Lưu tiến trình tự động, tiếp tục khi bị gián đoạn
-- ✅ **Progress bar thời gian thực** với tqdm - Hiển thị tiến độ, tốc độ, ETA
-- ✅ Hỗ trợ 8 định dạng: PNG, JPEG, JPG, WEBP, BMP, GIF, TIFF, ICO
-- ✅ Tùy chỉnh tên file đầu ra
-- ✅ Chọn thư mục lưu ảnh tùy ý
-- ✅ Xử lý tự động transparency cho JPEG
-- ✅ **Nén WEBP tối ưu** - Quality 80%, method 6 cho kích thước nhỏ nhất
-- ✅ **So sánh dung lượng** trước và sau khi chuyển đổi
-- ✅ **Thống kê chi tiết** - Thành công, thất bại, bỏ qua
-- ✅ **Silent mode** - Không in log khi xử lý hàng loạt để progress bar đẹp hơn
+- Chuyển đổi ảnh từ một URL
+- Chuyển đổi hàng loạt từ file chứa danh sách URL với đa luồng
+- **Chuyển đổi từ file JSON (movies format)** - Tự động đọc `slug` làm tên file, `poster` làm URL
+- **Tự động phát hiện file JSON trong thư mục mock** - Hiển thị danh sách file có sẵn để chọn nhanh
+- **Lọc phim chưa tải** - So sánh với thư mục ảnh, tạo danh sách phim cần tải
+- **Xử lý đa luồng** - Hỗ trợ 1-20 luồng, tăng tốc 3-5 lần
+- **Checkpoint/Resume** - Lưu tiến trình tự động, tiếp tục khi bị gián đoạn
+- **Progress bar thời gian thực** với tqdm - Hiển thị tiến độ, tốc độ, ETA
+- Hỗ trợ 8 định dạng: PNG, JPEG, JPG, WEBP, BMP, GIF, TIFF, ICO
+- Tùy chỉnh tên file đầu ra
+- Chọn thư mục lưu ảnh tùy ý
+- Xử lý tự động transparency cho JPEG
+- **Nén WEBP tối ưu** - Quality 80%, method 6 cho kích thước nhỏ nhất
+- **So sánh dung lượng** trước và sau khi chuyển đổi
+- **Thống kê chi tiết** - Thành công, thất bại, bỏ qua
+- **Silent mode** - Không in log khi xử lý hàng loạt để progress bar đẹp hơn
 
-## 📋 Yêu cầu
+## Yêu cầu
 
 ```bash
 pip install pillow requests tqdm
 ```
 
-## 🚀 Cách sử dụng
+## Cách sử dụng
 
 ### Chạy chương trình
 
@@ -37,13 +39,14 @@ python main.py
 
 ```text
 ============================================================
-🖼️  IMAGE FORMAT CONVERTER
+IMAGE FORMAT CONVERTER
 ============================================================
 1. Chuyển đổi từ một URL
 2. Chuyển đổi từ file chứa danh sách URL
 3. Chuyển đổi từ file JSON (movies format)
-4. Xóa checkpoint (tiến trình đã lưu)
-5. Thoát
+4. Lọc phim chưa tải từ JSON
+5. Xóa checkpoint (tiến trình đã lưu)
+6. Thoát
 ============================================================
 ```
 
@@ -66,7 +69,7 @@ URL: https://example.com/image.png
 Thư mục: ./output
 Tên file: my-image (hoặc Enter để tự động)
 
-✅ Kết quả: Hiển thị dung lượng file gốc và sau chuyển đổi, % tiết kiệm
+Kết quả: Hiển thị dung lượng file gốc và sau chuyển đổi, % tiết kiệm
 ```
 
 ### 2. Chuyển đổi từ file chứa URL
@@ -93,17 +96,17 @@ https://example.com/image4.png
 **Kết quả:**
 
 ```text
-🔄 Đang chuyển đổi: 100%|████████████| 4/4 [00:05<00:00, 0.75ảnh/s]
+Đang chuyển đổi: 100%|████████████| 4/4 [00:05<00:00, 0.75ảnh/s]
 
-📊 KẾT QUẢ:
-   ✅ Thành công: 4
-   ❌ Thất bại: 0
-   📊 Tổng cộng: 4
+KẾT QUẢ:
+   Thành công: 4
+   Thất bại: 0
+   Tổng cộng: 4
 ```
 
-### 3. Chuyển đổi từ file JSON (Movies format) ⭐ MỚI
+### 3. Chuyển đổi từ file JSON (Movies format)
 
-Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON.
+Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON với hỗ trợ đa luồng.
 
 **Format JSON yêu cầu:**
 
@@ -126,7 +129,7 @@ Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON.
 - **Tự động hiển thị danh sách file JSON** trong thư mục `mock` (nếu có):
 
   ```text
-  📁 Tìm thấy các file JSON trong thư mục mock:
+  Tìm thấy các file JSON trong thư mục mock:
      1. movies_posters.json (150.25 KB)
      2. movies_thumbs.json (98.50 KB)
      3. Nhập đường dẫn khác
@@ -137,17 +140,19 @@ Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON.
 - Chọn file từ danh sách hoặc nhập đường dẫn tùy chỉnh: `movies.json`
 - Chọn định dạng đầu ra (khuyến nghị WEBP cho web)
 - Nhập thư mục lưu file: `./posters`
+- Tùy chọn số luồng xử lý (mặc định: 5, tối đa: 20)
 
 **Kết quả:**
 
 ```text
-🎬 Đang chuyển đổi poster: 100%|████████| 2/2 [00:03<00:00, 0.67phim/s]
+[i] Sử dụng 5 luồng để xử lý
+Đang chuyển đổi poster: 100%|████████| 2/2 [00:01<00:00, 1.33phim/s]
 
-📊 KẾT QUẢ:
-   ✅ Thành công: 2
-   ❌ Thất bại: 0
-   ⏭️  Bỏ qua: 0
-   📊 Tổng cộng: 2
+KẾT QUẢ:
+   Thành công: 2
+   Thất bại: 0
+   Bỏ qua: 0
+   Tổng cộng: 2
 ```
 
 **Đặc điểm:**
@@ -160,7 +165,44 @@ Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON.
 - Progress bar màu xanh với đơn vị "phim"
 - Silent mode để không làm rối progress bar
 
-## 📝 Định dạng được hỗ trợ
+### 4. Lọc phim chưa tải từ JSON
+
+Phù hợp cho việc kiểm tra tiến độ tải và tạo danh sách phim chưa tải.
+
+**Các bước:**
+
+- Chọn option 4 trong menu
+- **Tự động hiển thị danh sách file JSON** trong thư mục `mock` (nếu có) hoặc nhập đường dẫn khác
+- Nhập thư mục chứa ảnh đã tải (mặc định: `poster`)
+- Nhập định dạng ảnh để kiểm tra (mặc định: `webp`)
+- Nhập tên file output (mặc định: tự động tạo tên `_undownloaded.json`)
+
+**Kết quả:**
+
+```text
+[i] Đang phân tích 25298 phim từ file JSON...
+[i] Tìm thấy 24850 ảnh đã tải trong thư mục 'poster'
+
+[+] Đã lưu 448 phim chưa tải vào: mock/movies_posters_undownloaded.json
+
+============================================================
+KẾT QUẢ LỌC:
+  [~] Chưa tải: 448
+  [+] Đã tải: 24850
+  [=] Tổng cộng: 25298
+  [i] Tiến độ: 98.2%
+============================================================
+```
+
+**Đặc điểm:**
+
+- **Tự động so sánh với thư mục ảnh** - Kiểm tra file đã tồn tại dựa vào slug
+- **Không phân biệt định dạng** - Hỗ trợ jpg, jpeg, png, webp, gif, bmp
+- **Tạo file JSON mới** - Chỉ chứa các phim chưa tải để xử lý tiếp
+- **Hiển thị thống kê chi tiết** - Số phim chưa tải, đã tải, và phần trăm tiến độ
+- **Tiết kiệm thời gian** - Không cần tải lại ảnh đã có
+
+## Định dạng được hỗ trợ
 
 | Định dạng | Mô tả                            | Ghi chú                            |
 | --------- | -------------------------------- | ---------------------------------- |
@@ -172,7 +214,7 @@ Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON.
 | TIFF      | Tagged Image File Format         | Chất lượng cao                     |
 | ICO       | Icon format                      | Dùng cho icon                      |
 
-## 🎯 Ví dụ sử dụng
+## Ví dụ sử dụng
 
 ### Chuyển đổi một ảnh PNG sang JPEG
 
@@ -193,14 +235,19 @@ File: urls.txt
 Thư mục: ./webp-output
 ```
 
-## ⚙️ Tính năng kỹ thuật
+## Tính năng kỹ thuật
 
+- **Xử lý đa luồng**:
+  - Hỗ trợ 1-20 luồng đồng thời (mặc định: 5)
+  - Thread-safe với Lock để đảm bảo checkpoint chính xác
+  - Batch processing thông minh để tối ưu hiệu suất
+  - Tăng tốc 3-5 lần so với xử lý tuần tự
 - **Tự động xử lý transparency**: Khi chuyển sang JPEG, tự động thêm nền trắng cho ảnh có alpha channel
 - **Tối ưu hóa nén**:
   - JPEG: Quality 85%, optimize=True
   - PNG: optimize=True
   - WEBP: Quality 80%, method=6 (nén tốt nhất), optimize=True
-- **Checkpoint/Resume System** 🆕:
+- **Checkpoint/Resume System**:
   - Tự động lưu tiến trình mỗi 10 ảnh/phim
   - File checkpoint: `.image_converter_checkpoint.json`
   - Phát hiện và hỏi resume khi chạy lại sau gián đoạn
@@ -213,16 +260,16 @@ Thư mục: ./webp-output
 - **Timeout**: Giới hạn thời gian tải ảnh là 30 giây
 - **So sánh dung lượng**: Hiển thị % tăng/giảm dung lượng sau chuyển đổi
 
-## 🐛 Xử lý lỗi
+## Xử lý lỗi
 
 Chương trình sẽ thông báo chi tiết khi gặp lỗi:
 
-- ❌ Lỗi kết nối hoặc URL không hợp lệ
-- ❌ Lỗi khi xử lý ảnh (format không hỗ trợ)
-- ❌ Lỗi khi tạo thư mục hoặc lưu file
-- ❌ File URL không tồn tại hoặc không đọc được
+- Lỗi kết nối hoặc URL không hợp lệ
+- Lỗi khi xử lý ảnh (format không hỗ trợ)
+- Lỗi khi tạo thư mục hoặc lưu file
+- File URL không tồn tại hoặc không đọc được
 
-## 📦 Cấu trúc thư mục
+## Cấu trúc thư mục
 
 ```text
 image-format-converter/
@@ -237,7 +284,7 @@ image-format-converter/
 └── .image_converter_checkpoint.json # Checkpoint (tự động tạo khi cần)
 ```
 
-## 🔄 Checkpoint/Resume - Tính năng mới
+## Checkpoint/Resume
 
 ### Cách hoạt động
 
@@ -247,15 +294,15 @@ Khi xử lý hàng loạt (option 2 hoặc 3), tool tự động:
 2. **Khi bị gián đoạn** (Ctrl+C, crash, mất mạng):
 
    ```text
-   ⚠️  Đã bị gián đoạn! Đang lưu tiến trình...
-   💾 Đã lưu tiến trình: 1250/25298 phim
-   ℹ️  Chạy lại và chọn 'Resume' để tiếp tục
+   Đã bị gián đoạn! Đang lưu tiến trình...
+   Đã lưu tiến trình: 1250/25298 phim
+   Chạy lại và chọn 'Resume' để tiếp tục
    ```
 
 3. **Khi chạy lại**, tự động phát hiện:
 
    ```text
-   💾 Phát hiện tiến trình chưa hoàn thành!
+   Phát hiện tiến trình chưa hoàn thành!
       File: movies.json
       Đã xử lý: 1250 phim
 
@@ -269,41 +316,42 @@ Khi xử lý hàng loạt (option 2 hoặc 3), tool tự động:
 Chọn **option 4** trong menu để xóa checkpoint:
 
 ```text
-💾 Checkpoint hiện tại:
+Checkpoint hiện tại:
    File: movies.json
    Đã xử lý: 1250 mục
    Định dạng: WEBP
    Thư mục: ./posters
 
-⚠️  Xác nhận xóa checkpoint? (y/n):
+Xác nhận xóa checkpoint? (y/n):
 ```
 
 ### Lợi ích
 
-- ✅ **An toàn 100%** - Không lo mất công khi xử lý hàng nghìn ảnh
-- ✅ **Linh hoạt** - Dừng bất cứ lúc nào, tiếp tục sau
-- ✅ **Tự động** - Không cần làm gì, tool tự lo
-- ✅ **Thông minh** - Chỉ hỏi resume khi cần thiết
+- **An toàn 100%** - Không lo mất công khi xử lý hàng nghìn ảnh
+- **Linh hoạt** - Dừng bất cứ lúc nào, tiếp tục sau
+- **Tự động** - Không cần làm gì, tool tự lo
+- **Thông minh** - Chỉ hỏi resume khi cần thiết
 
-## 📊 Ví dụ thực tế
+## Ví dụ thực tế
 
 ### Chuyển đổi 25,000 poster phim sang WEBP
 
 ```text
-📋 Tìm thấy 25298 bộ phim trong file
-🎬 Đang chuyển đổi poster: 100%|████████| 25298/25298 [02:25:11<00:00, 2.90phim/s]
+Tìm thấy 25298 bộ phim trong file
+[i] Sử dụng 5 luồng để xử lý
+Đang chuyển đổi poster: 100%|████████| 25298/25298 [00:45:20<00:00, 9.30phim/s]
 
-📊 KẾT QUẢ:
-   ✅ Thành công: 24850
-   ❌ Thất bại: 138 (URL không tồn tại hoặc hết hạn)
-   ⏭️  Bỏ qua: 310 (thiếu slug hoặc poster)
-   📊 Tổng cộng: 25298
+KẾT QUẢ:
+   Thành công: 24850
+   Thất bại: 138 (URL không tồn tại hoặc hết hạn)
+   Bỏ qua: 310 (thiếu slug hoặc poster)
+   Tổng cộng: 25298
 
-⏱️  Thời gian: ~2.5 giờ
-💾 Dung lượng: Trung bình giảm 35% so với JPG gốc
+Thời gian: ~45 phút (5 luồng)
+Dung lượng: Trung bình giảm 35% so với JPG gốc
 ```
 
-## 💡 Tips & Best Practices
+## Tips & Best Practices
 
 1. **Chuyển đổi sang WEBP** - Khuyến nghị cho web hiện đại:
 
@@ -325,24 +373,38 @@ Chọn **option 4** trong menu để xóa checkpoint:
 
 4. **Sử dụng file JSON** (option 3) cho projects lớn:
 
-   - Xử lý hàng ngàn poster cùng lúc
+   - Xử lý hàng ngàn poster cùng lúc với đa luồng
    - Tên file tự động từ slug, dễ quản lý
    - Progress bar giúp theo dõi tiến độ
    - Tạo thư mục `mock/` để lưu các file JSON, tool sẽ tự động phát hiện và hiển thị
+   - Điều chỉnh số luồng phù hợp với tốc độ mạng và cấu hình máy
 
-5. **Tips khác**:
+5. **Sử dụng tính năng lọc** (option 4) để tối ưu:
+
+   - Kiểm tra tiến độ tải sau khi bị gián đoạn
+   - Tạo file JSON mới chỉ chứa phim chưa tải
+   - Tiết kiệm thời gian không phải tải lại ảnh đã có
+   - Theo dõi phần trăm hoàn thành của dự án
+
+6. **Tips khác**:
    - Thêm **#** ở đầu dòng trong file URL để comment
    - Tạo thư mục riêng cho từng định dạng: `./webp`, `./jpeg`
    - Kiểm tra kết quả với vài ảnh trước khi xử lý hàng loạt
    - Đặt các file JSON vào thư mục `mock/` để chọn nhanh khi sử dụng option 3
 
-## 🚀 Performance
+## Performance
 
-- **Tốc độ**: ~1-2 ảnh/giây (tùy kích thước và kết nối)
+- **Tốc độ đơn luồng**: ~1-2 ảnh/giây (tùy kích thước và kết nối)
+- **Tốc độ đa luồng (5 luồng)**: ~5-10 ảnh/giây (tăng 3-5 lần)
+- **Khuyến nghị số luồng**:
+  - Mạng chậm: 3-5 luồng
+  - Mạng nhanh: 5-10 luồng
+  - Máy mạnh + mạng tốt: 10-20 luồng
 - **WEBP method 6**: Chậm hơn nhưng nén tốt hơn 10-15%
-- **Batch processing**: Xử lý tuần tự, ổn định với hàng ngàn ảnh
+- **Batch processing**: Xử lý song song với ThreadPoolExecutor
 - **Memory efficient**: Xử lý từng ảnh một, không tốn RAM
+- **Thread-safe**: Đảm bảo checkpoint chính xác trong môi trường đa luồng
 
-## 📄 License
+## License
 
 MIT License
