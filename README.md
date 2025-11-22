@@ -1,12 +1,13 @@
 # Image Format Converter
 
-Công cụ chuyển đổi định dạng ảnh từ URL sang các định dạng khác nhau bằng Python với giao diện terminal thân thiện và progress bar đẹp mắt.
+Công cụ chuyển đổi định dạng ảnh từ URL sang các định dạng khác nhau bằng Python với giao diện terminal hiện đại và đẹp mắt sử dụng Rich.
 
 ## Tính năng
 
+- **Giao diện đẹp mắt** - Sử dụng Rich library với gradient colors, tables và panels
 - Chuyển đổi ảnh từ một URL
 - Chuyển đổi hàng loạt từ file chứa danh sách URL với đa luồng
-- **Chuyển đổi từ file JSON (movies format)** - Tự động đọc `slug` làm tên file, `poster` làm URL
+- **Chuyển đổi từ file JSON (movies format)** - Tự động đọc `slug` làm tên file, `url` làm URL
 - **Tự động phát hiện file JSON trong thư mục mock** - Hiển thị danh sách file có sẵn để chọn nhanh
 - **Lọc phim chưa tải** - So sánh với thư mục ảnh, tạo danh sách phim cần tải
 - **Xử lý đa luồng** - Hỗ trợ 1-20 luồng, tăng tốc 3-5 lần
@@ -18,13 +19,14 @@ Công cụ chuyển đổi định dạng ảnh từ URL sang các định dạn
 - Xử lý tự động transparency cho JPEG
 - **Nén WEBP tối ưu** - Quality 80%, method 6 cho kích thước nhỏ nhất
 - **So sánh dung lượng** trước và sau khi chuyển đổi
-- **Thống kê chi tiết** - Thành công, thất bại, bỏ qua
+- **Thống kê chi tiết** - Thành công, thất bại, bỏ qua với bảng đẹp
 - **Silent mode** - Không in log khi xử lý hàng loạt để progress bar đẹp hơn
+- **Hướng dẫn tích hợp** - Menu hướng dẫn chi tiết ngay trong app
 
 ## Yêu cầu
 
 ```bash
-pip install pillow requests tqdm
+pip install pillow requests tqdm rich
 ```
 
 ## Cách sử dụng
@@ -38,16 +40,26 @@ python main.py
 ### Menu chính
 
 ```text
-============================================================
-IMAGE FORMAT CONVERTER
-============================================================
-1. Chuyển đổi từ một URL
-2. Chuyển đổi từ file chứa danh sách URL
-3. Chuyển đổi từ file JSON (movies format)
-4. Lọc phim chưa tải từ JSON
-5. Xóa checkpoint (tiến trình đã lưu)
-6. Thoát
-============================================================
+██████╗ ██╗  ██╗ ██████╗ ██╗  ██╗ ██████╗  ██████╗ ██████╗ ██████╗ ██████╗ ███████╗
+██╔══██╗██║  ██║██╔═══██╗██║  ██║██╔═══██╗██╔════╝██╔════╝██╔═══██╗██╔══██╗██╔════╝
+██████╔╝███████║██║   ██║███████║██║   ██║██║     ██║     ██║   ██║██║  ██║█████╗
+██╔═══╝ ██╔══██║██║   ██║██╔══██║██║   ██║██║     ██║     ██║   ██║██║  ██║██╔══╝
+██║     ██║  ██║╚██████╔╝██║  ██║╚██████╔╝╚██████╗╚██████╗╚██████╔╝██████╔╝███████╗
+╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                         IMAGE FORMAT CONVERTER                                   ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌────────┬────────────────────────────────────────────────────────────────┐
+│   1.   │ Chuyển đổi từ một URL                                          │
+│   2.   │ Chuyển đổi từ file chứa danh sách URL                          │
+│   3.   │ Chuyển đổi từ file JSON (movies format)                        │
+│   4.   │ Lọc phim chưa tải từ JSON                                      │
+│   5.   │ Xóa checkpoint (tiến trình đã lưu)                             │
+│   6.   │ Hướng dẫn sử dụng                                              │
+│   7.   │ Thoát                                                          │
+└────────┴────────────────────────────────────────────────────────────────┘
 ```
 
 ### 1. Chuyển đổi từ một URL
@@ -96,12 +108,16 @@ https://example.com/image4.png
 **Kết quả:**
 
 ```text
-Đang chuyển đổi: 100%|████████████| 4/4 [00:05<00:00, 0.75ảnh/s]
+[>] Đang chuyển đổi: 100%|████████████| 4/4 [00:05<00:00, 0.75ảnh/s]
 
-KẾT QUẢ:
-   Thành công: 4
-   Thất bại: 0
-   Tổng cộng: 4
+╔══════════════════════════════════════╗
+║             KẾT QUẢ                 ║
+╠══════════════════════════════════════╣
+║ Thành công          │              4 ║
+║ Thất bại            │              0 ║
+║ Bỏ qua              │              0 ║
+║ Tổng cộng           │              4 ║
+╚══════════════════════════════════════╝
 ```
 
 ### 3. Chuyển đổi từ file JSON (Movies format)
@@ -114,11 +130,11 @@ Phù hợp cho việc chuyển đổi hàng loạt poster phim từ file JSON v�
 [
   {
     "slug": "avatar-the-way-of-water",
-    "poster": "https://phimimg.com/upload/vod/avatar.jpg"
+    "url": "https://phimimg.com/upload/vod/avatar.jpg"
   },
   {
     "slug": "top-gun-maverick",
-    "poster": "https://phimimg.com/upload/vod/topgun.jpg"
+    "url": "https://phimimg.com/upload/vod/topgun.jpg"
   }
 ]
 ```
@@ -157,13 +173,14 @@ KẾT QUẢ:
 
 **Đặc điểm:**
 
-- **Tự động phát hiện thư mục `mock`** - Hiển thị danh sách file JSON có sẵn để chọn nhanh
-- **Hiển thị thông tin file** - Tên file và kích thước (KB) để dễ lựa chọn
+- **Tự động phát hiện thư mục `mock`** - Hiển thị danh sách file JSON có sẵn với Rich table để chọn nhanh
+- **Hiển thị thông tin file** - Tên file và kích thước (KB) trong bảng đẹp mắt
 - File đầu ra tự động lấy tên từ trường `slug`: `avatar-the-way-of-water.webp`
-- URL lấy từ trường `poster`
-- Tự động bỏ qua các bản ghi thiếu `slug` hoặc `poster`
-- Progress bar màu xanh với đơn vị "phim"
+- URL lấy từ trường `url`
+- Tự động bỏ qua các bản ghi thiếu `slug` hoặc `url`
+- Progress bar màu xanh lá với đơn vị "phim"
 - Silent mode để không làm rối progress bar
+- Kết quả hiển thị trong bảng đẹp với Rich
 
 ### 4. Lọc phim chưa tải từ JSON
 
@@ -180,18 +197,19 @@ Phù hợp cho việc kiểm tra tiến độ tải và tạo danh sách phim ch
 **Kết quả:**
 
 ```text
-[i] Đang phân tích 25298 phim từ file JSON...
-[i] Tìm thấy 24850 ảnh đã tải trong thư mục 'poster'
+ℹ Đang phân tích 25298 phim từ file JSON...
+ℹ Tìm thấy 24850 ảnh đã tải trong thư mục 'poster'
 
-[+] Đã lưu 448 phim chưa tải vào: mock/movies_posters_undownloaded.json
+✓ Đã lưu 448 phim chưa tải vào: mock/movies_posters_undownloaded.json
 
-============================================================
-KẾT QUẢ LỌC:
-  [~] Chưa tải: 448
-  [+] Đã tải: 24850
-  [=] Tổng cộng: 25298
-  [i] Tiến độ: 98.2%
-============================================================
+╔══════════════════════════════════════╗
+║          KẾT QUẢ LỌC                ║
+╠══════════════════════════════════════╣
+║ Chưa tải           │            448 ║
+║ Đã tải             │         24,850 ║
+║ Tổng cộng          │         25,298 ║
+║ Tiến độ            │          98.2% ║
+╚══════════════════════════════════════╝
 ```
 
 **Đặc điểm:**
@@ -302,9 +320,12 @@ Khi xử lý hàng loạt (option 2 hoặc 3), tool tự động:
 3. **Khi chạy lại**, tự động phát hiện:
 
    ```text
-   Phát hiện tiến trình chưa hoàn thành!
-      File: movies.json
-      Đã xử lý: 1250 phim
+   ℹ Phát hiện tiến trình chưa hoàn thành!
+
+   ┌────────────────┬─────────────────┐
+   │ File           │ movies.json     │
+   │ Đã xử lý       │ 1250 phim       │
+   └────────────────┴─────────────────┘
 
    Tiếp tục từ tiến trình cũ? (y/n):
    ```
@@ -313,14 +334,17 @@ Khi xử lý hàng loạt (option 2 hoặc 3), tool tự động:
 
 ### Xóa checkpoint thủ công
 
-Chọn **option 4** trong menu để xóa checkpoint:
+Chọn **option 5** trong menu để xóa checkpoint:
 
 ```text
-Checkpoint hiện tại:
-   File: movies.json
-   Đã xử lý: 1250 mục
-   Định dạng: WEBP
-   Thư mục: ./posters
+╭──────────── CHECKPOINT HIỆN TẠI ─────────────╮
+│ Thông tin      │ Giá trị                     │
+├────────────────┼─────────────────────────────┤
+│ File           │ movies.json                 │
+│ Đã xử lý       │ 1250 mục                    │
+│ Định dạng      │ WEBP                        │
+│ Thư mục        │ ./posters                   │
+╰────────────────┴─────────────────────────────╯
 
 Xác nhận xóa checkpoint? (y/n):
 ```
@@ -337,15 +361,18 @@ Xác nhận xóa checkpoint? (y/n):
 ### Chuyển đổi 25,000 poster phim sang WEBP
 
 ```text
-Tìm thấy 25298 bộ phim trong file
-[i] Sử dụng 5 luồng để xử lý
-Đang chuyển đổi poster: 100%|████████| 25298/25298 [00:45:20<00:00, 9.30phim/s]
+ℹ Tìm thấy 25298 bộ phim trong file
+ℹ Sử dụng 5 luồng để xử lý
+[>] Đang chuyển đổi ảnh: 100%|████████| 25298/25298 [00:45:20<00:00, 9.30phim/s]
 
-KẾT QUẢ:
-   Thành công: 24850
-   Thất bại: 138 (URL không tồn tại hoặc hết hạn)
-   Bỏ qua: 310 (thiếu slug hoặc poster)
-   Tổng cộng: 25298
+╔══════════════════════════════════════╗
+║             KẾT QUẢ                 ║
+╠══════════════════════════════════════╣
+║ Thành công         │         24,850 ║
+║ Thất bại           │            138 ║
+║ Bỏ qua             │            310 ║
+║ Tổng cộng          │         25,298 ║
+╚══════════════════════════════════════╝
 
 Thời gian: ~45 phút (5 luồng)
 Dung lượng: Trung bình giảm 35% so với JPG gốc
@@ -390,7 +417,8 @@ Dung lượng: Trung bình giảm 35% so với JPG gốc
    - Thêm **#** ở đầu dòng trong file URL để comment
    - Tạo thư mục riêng cho từng định dạng: `./webp`, `./jpeg`
    - Kiểm tra kết quả với vài ảnh trước khi xử lý hàng loạt
-   - Đặt các file JSON vào thư mục `mock/` để chọn nhanh khi sử dụng option 3
+   - Đặt các file JSON vào thư mục `mock/` để chọn nhanh khi sử dụng option 3 hoặc 4
+   - Sử dụng option 6 để xem hướng dẫn chi tiết ngay trong app
 
 ## Performance
 

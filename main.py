@@ -5,7 +5,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from tqdm import tqdm
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -70,6 +70,14 @@ class ImageConverter:
         })
         self.checkpoint_lock = Lock()  # Lock để đảm bảo thread-safe khi lưu checkpoint
     
+    def __del__(self):
+        """Cleanup session khi object bị destroy"""
+        try:
+            if hasattr(self, 'session'):
+                self.session.close()
+        except Exception:
+            pass
+    
     def validate_url(self, url: str) -> bool:
         """Kiểm tra URL có hợp lệ không"""
         try:
@@ -92,7 +100,7 @@ class ImageConverter:
                 with open(self.CHECKPOINT_FILE, 'w', encoding='utf-8') as f:
                     json.dump(checkpoint_data, f, indent=2)
             except Exception as e:
-                print(f"[!] Không thể lưu checkpoint: {e}")
+                console.print(f"[bold yellow]⚠[/bold yellow] Không thể lưu checkpoint: {e}")
     
     def load_checkpoint(self) -> Optional[dict]:
         """Đọc checkpoint nếu có"""
@@ -101,6 +109,11 @@ class ImageConverter:
                 with open(self.CHECKPOINT_FILE, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception:
+                # Xóa checkpoint bị corrupt
+                try:
+                    os.remove(self.CHECKPOINT_FILE)
+                except Exception:
+                    pass
                 return None
         return None
     
@@ -112,16 +125,16 @@ class ImageConverter:
         except Exception:
             pass
     
-    def download_image(self, url: str, silent: bool = False) -> tuple[Optional[Image.Image], int]:
+    def download_image(self, url: str, silent: bool = False) -> Tuple[Optional[Image.Image], int]:
         """Tải ảnh từ URL và trả về ảnh cùng với kích thước file gốc"""
         try:
             if not silent:
-                print(f"[>] Đang tải ảnh từ: {url}")
+                console.print(f"[bold cyan]>[/bold cyan] Đang tải ảnh từ: {url}")
             
             # Validate URL trước khi tải
             if not self.validate_url(url):
                 if not silent:
-                    print(f"[-] URL không hợp lệ: {url}")
+                    console.print(f"[bold red]✗[/bold red] URL không hợp lệ: {url}")
                 return None, 0
             
             response = self.session.get(url, timeout=30)
@@ -131,15 +144,15 @@ class ImageConverter:
             image = Image.open(BytesIO(response.content))
             if not silent:
                 size_mb = original_size / (1024 * 1024)
-                print(f"[+] Tải thành công! Kích thước: {image.size}, Định dạng: {image.format}, Dung lượng: {size_mb:.2f} MB ({original_size:,} bytes)")
+                console.print(f"[bold green]✓[/bold green] Tải thành công! Kích thước: {image.size}, Định dạng: {image.format}, Dung lượng: {size_mb:.2f} MB ({original_size:,} bytes)")
             return image, original_size
         except requests.exceptions.RequestException as e:
             if not silent:
-                print(f"[-] Lỗi khi tải ảnh: {e}")
+                console.print(f"[bold red]✗[/bold red] Lỗi khi tải ảnh: {e}")
             return None, 0
         except Exception as e:
             if not silent:
-                print(f"[-] Lỗi khi xử lý ảnh: {e}")
+                console.print(f"[bold red]✗[/bold red] Lỗi khi xử lý ảnh: {e}")
             return None, 0
     
     def convert_image(self, image: Image.Image, output_format: str) -> Optional[Image.Image]:
@@ -182,7 +195,7 @@ class ImageConverter:
             # Kiểm tra file đã tồn tại
             if check_duplicate and os.path.exists(output_path):
                 if not silent:
-                    print(f"[i] File đã tồn tại, bỏ qua: {output_path}")
+                    console.print(f"[bold yellow]ℹ[/bold yellow] File đã tồn tại, bỏ qua: {output_path}")
                 return False
             
             # Tạo thư mục nếu chưa tồn tại
@@ -206,15 +219,15 @@ class ImageConverter:
                 # Hiển thị thông tin dung lượng file sau khi lưu
                 saved_size = os.path.getsize(output_path)
                 size_mb = saved_size / (1024 * 1024)
-                print(f"[+] Đã lưu: {output_path}")
-                print(f"[i] Dung lượng file: {size_mb:.2f} MB ({saved_size:,} bytes)")
+                console.print(f"[bold green]✓[/bold green] Đã lưu: {output_path}")
+                console.print(f"[bold cyan]ℹ[/bold cyan] Dung lượng file: {size_mb:.2f} MB ({saved_size:,} bytes)")
             return True
         except Exception as e:
             if not silent:
-                print(f"[-] Lỗi khi lưu ảnh: {e}")
+                console.print(f"[bold red]✗[/bold red] Lỗi khi lưu ảnh: {e}")
             return False
     
-    def _worker_process_url(self, idx: int, url: str, output_format: str, output_dir: str, custom_name: Optional[str] = None) -> tuple[int, int]:
+    def _worker_process_url(self, idx: int, url: str, output_format: str, output_dir: str, custom_name: Optional[str] = None) -> Tuple[int, int]:
         """Worker function để xử lý URL trong thread pool
         Returns: (idx, status) where status: 1=success, 0=fail, -1=skip
         """
@@ -237,19 +250,19 @@ class ImageConverter:
         success = self.process_url(url, output_format, output_dir, custom_name, silent=True)
         return idx, 1 if success else 0
     
-    def _worker_process_movie(self, idx: int, movie: dict, output_format: str, output_dir: str) -> tuple[int, int]:
+    def _worker_process_movie(self, idx: int, movie: dict, output_format: str, output_dir: str) -> Tuple[int, int]:
         """Worker function để xử lý movie trong thread pool
         Returns: (idx, status) where status: 1=success, 0=fail, -1=skip
         """
-        # Kiểm tra có trường poster và slug không
-        if 'poster' not in movie or 'slug' not in movie:
+        # Kiểm tra có trường url và slug không
+        if 'url' not in movie or 'slug' not in movie:
             return idx, -1  # Skip
         
-        poster_url = movie['poster']
+        image_url = movie['url']
         slug = movie['slug']
         
         # Bỏ qua nếu URL hoặc slug trống
-        if not poster_url or not slug:
+        if not image_url or not slug:
             return idx, -1  # Skip
         
         # Kiểm tra file đã tồn tại
@@ -259,8 +272,8 @@ class ImageConverter:
             return idx, -1  # Skip
         
         # Xử lý chuyển đổi
-        image, original_size = self.download_image(poster_url, silent=True)
-        if image is not None:  # ✅ Check đúng cách
+        image, original_size = self.download_image(image_url, silent=True)
+        if image is not None:  #  Check đúng cách
             converted_image = self.convert_image(image, output_format)
             if converted_image:
                 filename = f"{slug}.{output_format.lower()}"
@@ -274,7 +287,7 @@ class ImageConverter:
     def process_url(self, url: str, output_format: str, output_dir: str, custom_name: Optional[str] = None, silent: bool = False) -> bool:
         """Xử lý một URL ảnh"""
         if not silent:
-            print(f"\n{'='*60}")
+            console.print(f"\n[dim]{'='*60}[/dim]")
         
         # Tải ảnh
         image, original_size = self.download_image(url, silent=silent)
@@ -308,13 +321,13 @@ class ImageConverter:
             percent = (diff / original_size) * 100
             
             if diff > 0:
-                print(f"[!] Dung lượng tăng: +{diff:,} bytes (+{percent:.1f}%)")
+                console.print(f"[bold yellow]⚠[/bold yellow] Dung lượng tăng: +{diff:,} bytes (+{percent:.1f}%)")
             else:
-                print(f"[+] Dung lượng giảm: {abs(diff):,} bytes ({abs(percent):.1f}%)")
+                console.print(f"[bold green]✓[/bold green] Dung lượng giảm: {abs(diff):,} bytes ({abs(percent):.1f}%)")
         
         return success
     
-    def process_urls_from_file(self, file_path: str, output_format: str, output_dir: str, resume: bool = False, num_workers: int = None) -> tuple:
+    def process_urls_from_file(self, file_path: str, output_format: str, output_dir: str, resume: bool = False, num_workers: int = None) -> Tuple[int, int, int]:
         """Xử lý nhiều URL từ file với hỗ trợ checkpoint và đa luồng"""
         if num_workers is None:
             num_workers = self.MAX_WORKERS
@@ -324,8 +337,8 @@ class ImageConverter:
                 urls = [line.strip() for line in f if line.strip() and not line.startswith('#')]
             
             if not urls:
-                print("[-] File không chứa URL nào!")
-                return 0, 0
+                print_error("File không chứa URL nào!")
+                return 0, 0, 0
             
             # Kiểm tra resume checkpoint
             processed_indices = []
@@ -335,12 +348,12 @@ class ImageConverter:
                 if checkpoint and checkpoint.get('file_path') == file_path:
                     processed_indices = checkpoint.get('processed_indices', [])
                     start_index = len(processed_indices)
-                    print(f"\n[>] Tiếp tục từ ảnh thứ {start_index + 1}/{len(urls)}")
+                    console.print(f"\n[bold cyan]>[/bold cyan] Tiếp tục từ ảnh thứ {start_index + 1}/{len(urls)}")
             
-            print(f"\n[i] Tìm thấy {len(urls)} URL trong file")
-            print(f"[i] Sử dụng {num_workers} luồng để xử lý")
+            print_info(f"Tìm thấy {len(urls)} URL trong file")
+            print_info(f"Sử dụng {num_workers} luồng để xử lý")
             if start_index > 0:
-                print(f"[i] Đã xử lý: {start_index} ảnh")
+                print_info(f"Đã xử lý: {start_index} ảnh")
             
             # Constants cho status
             STATUS_SUCCESS = 1
@@ -390,7 +403,7 @@ class ImageConverter:
                         for future in as_completed(futures):
                             task_idx, status = future.result()
                             
-                            # ✅ Thread-safe append
+                            #  Thread-safe append
                             with self.checkpoint_lock:
                                 processed_indices.append([task_idx, status])
                                 if status == STATUS_SUCCESS:
@@ -410,29 +423,29 @@ class ImageConverter:
                 self.clear_checkpoint()
                 
             except KeyboardInterrupt:
-                print("\n\n[!] Đã bị gián đoạn! Đang lưu tiến trình...")
-                # ✅ Shutdown executor trước khi lưu
+                console.print("\n\n[bold yellow]⚠[/bold yellow] Đã bị gián đoạn! Đang lưu tiến trình...")
+                #  Shutdown executor trước khi lưu
                 if executor:
                     executor.shutdown(wait=True, cancel_futures=True)
                 self.save_checkpoint(file_path, processed_indices, output_format, output_dir)
-                print(f"[+] Đã lưu tiến trình: {len(processed_indices)}/{len(urls)} ảnh")
-                print(f"[i] Chạy lại và chọn 'Resume' để tiếp tục")
+                print_success(f"Đã lưu tiến trình: {len(processed_indices)}/{len(urls)} ảnh")
+                print_info("Chạy lại và chọn 'Resume' để tiếp tục")
                 return success_count, fail_count, skipped_count
             finally:
-                # ✅ Đảm bảo executor được đóng
+                #  Đảm bảo executor được đóng
                 if executor:
                     executor.shutdown(wait=False)
             
             return success_count, fail_count, skipped_count
         except FileNotFoundError:
-            print(f"[-] Không tìm thấy file: {file_path}")
+            print_error(f"Không tìm thấy file: {file_path}")
             return 0, 0, 0
         except Exception as e:
-            print(f"[-] Lỗi khi đọc file: {e}")
+            print_error(f"Lỗi khi đọc file: {e}")
             return 0, 0, 0
     
-    def process_movies_json(self, file_path: str, output_format: str, output_dir: str, resume: bool = False, num_workers: int = None) -> tuple:
-        """Xử lý file JSON với định dạng movies (slug làm tên, poster làm URL) với đa luồng"""
+    def process_movies_json(self, file_path: str, output_format: str, output_dir: str, resume: bool = False, num_workers: int = None) -> Tuple[int, int, int]:
+        """Xử lý file JSON với định dạng movies (slug làm tên, url làm URL) với đa luồng"""
         if num_workers is None:
             num_workers = self.MAX_WORKERS
         
@@ -446,20 +459,20 @@ class ImageConverter:
                 movies = json.load(f)
             
             if not movies:
-                print("[-] File JSON không chứa dữ liệu!")
+                print_error("File JSON không chứa dữ liệu!")
                 return 0, 0, 0
             
             if not isinstance(movies, list):
-                print("[-] File JSON phải là một mảng các object!")
+                print_error("File JSON phải là một mảng các object!")
                 return 0, 0, 0
             
             # Kiểm tra resume checkpoint
-            processed_results = []  # ✅ Lưu tuple (idx, status) thay vì magic number
+            processed_results = []  #  Lưu tuple (idx, status) thay vì magic number
             start_index = 0
             if resume:
                 checkpoint = self.load_checkpoint()
                 if checkpoint and checkpoint.get('file_path') == file_path:
-                    # ✅ Chuyển đổi format cũ sang format mới
+                    #  Chuyển đổi format cũ sang format mới
                     old_indices = checkpoint.get('processed_indices', [])
                     for idx_val in old_indices:
                         if isinstance(idx_val, list):  # Format mới
@@ -472,12 +485,12 @@ class ImageConverter:
                             else:
                                 processed_results.append((abs(idx_val), STATUS_FAIL))
                     start_index = len(processed_results)
-                    print(f"\n[>] Tiếp tục từ phim thứ {start_index + 1}/{len(movies)}")
+                    console.print(f"\n[bold cyan]>[/bold cyan] Tiếp tục từ phim thứ {start_index + 1}/{len(movies)}")
             
-            print(f"\n[i] Tìm thấy {len(movies)} bộ phim trong file")
-            print(f"[i] Sử dụng {num_workers} luồng để xử lý")
+            print_info(f"Tìm thấy {len(movies)} bộ phim trong file")
+            print_info(f"Sử dụng {num_workers} luồng để xử lý")
             if start_index > 0:
-                print(f"[i] Đã xử lý: {start_index} phim")
+                print_info(f"Đã xử lý: {start_index} phim")
             
             # Đếm từ processed_results
             success_count = sum(1 for _, status in processed_results if status == STATUS_SUCCESS)
@@ -488,7 +501,7 @@ class ImageConverter:
             try:
                 # Sử dụng ThreadPoolExecutor để xử lý đa luồng
                 executor = ThreadPoolExecutor(max_workers=num_workers)
-                with tqdm(total=len(movies), initial=start_index, desc="[>] Đang chuyển đổi poster", unit="phim", ncols=100, colour='green') as pbar:
+                with tqdm(total=len(movies), initial=start_index, desc="[>] Đang chuyển đổi ảnh", unit="phim", ncols=100, colour='green') as pbar:
                     # Submit tasks theo batch
                     batch_size = num_workers * 2
                     idx = start_index
@@ -506,7 +519,7 @@ class ImageConverter:
                         for future in as_completed(futures):
                             task_idx, status = future.result()
                             
-                            # ✅ Thread-safe với lock bao toàn bộ operations
+                            #  Thread-safe với lock bao toàn bộ operations
                             with self.checkpoint_lock:
                                 processed_results.append((task_idx, status))
                                 if status == STATUS_SUCCESS:
@@ -527,43 +540,43 @@ class ImageConverter:
                 self.clear_checkpoint()
                 
             except KeyboardInterrupt:
-                print("\n\n[!] Đã bị gián đoạn! Đang lưu tiến trình...")
-                # ✅ Shutdown executor trước khi lưu
+                console.print("\n\n[bold yellow]⚠[/bold yellow] Đã bị gián đoạn! Đang lưu tiến trình...")
+                #  Shutdown executor trước khi lưu
                 if executor:
                     executor.shutdown(wait=True, cancel_futures=True)
                 indices_for_checkpoint = [list(item) for item in processed_results]
                 self.save_checkpoint(file_path, indices_for_checkpoint, output_format, output_dir)
-                print(f"[+] Đã lưu tiến trình: {len(processed_results)}/{len(movies)} phim")
-                print(f"[i] Chạy lại và chọn 'Resume' để tiếp tục")
+                print_success(f"Đã lưu tiến trình: {len(processed_results)}/{len(movies)} phim")
+                print_info("Chạy lại và chọn 'Resume' để tiếp tục")
                 return success_count, fail_count, skipped_count
             finally:
-                # ✅ Đảm bảo executor được đóng
+                #  Đảm bảo executor được đóng
                 if executor:
                     executor.shutdown(wait=False)
             
             return success_count, fail_count, skipped_count
         except FileNotFoundError:
-            print(f"[-] Không tìm thấy file: {file_path}")
+            print_error(f"Không tìm thấy file: {file_path}")
             return 0, 0, 0
         except json.JSONDecodeError as e:
-            print(f"[-] Lỗi khi đọc file JSON: {e}")
+            print_error(f"Lỗi khi đọc file JSON: {e}")
             return 0, 0, 0
         except Exception as e:
-            print(f"[-] Lỗi: {e}")
+            print_error(f"Lỗi: {e}")
             return 0, 0, 0
 
 
-def filter_undownloaded_movies(json_file: str, poster_dir: str, output_file: str, image_format: str = 'webp') -> tuple:
+def filter_undownloaded_movies(json_file: str, image_dir: str, output_file: str, image_format: str = 'webp') -> Tuple[int, int, int]:
     """Lọc các phim chưa tải từ file JSON, so sánh với thư mục ảnh
     
     Args:
         json_file: Đường dẫn đến file JSON chứa danh sách phim
-        poster_dir: Thư mục chứa ảnh poster đã tải
+        image_dir: Thư mục chứa ảnh đã tải
         output_file: File JSON output chứa danh sách phim chưa tải
         image_format: Định dạng ảnh để kiểm tra (mặc định: webp)
     
     Returns:
-        tuple: (số phim chưa tải, số phim đã tải, tổng số phim)
+        Tuple[int, int, int]: (số phim chưa tải, số phim đã tải, tổng số phim)
     """
     try:
         # Đọc file JSON
@@ -571,23 +584,23 @@ def filter_undownloaded_movies(json_file: str, poster_dir: str, output_file: str
             movies = json.load(f)
         
         if not movies or not isinstance(movies, list):
-            print("[-] File JSON không hợp lệ!")
+            print_error("File JSON không hợp lệ!")
             return 0, 0, 0
         
-        print(f"\n[i] Đang phân tích {len(movies)} phim từ file JSON...")
+        print_info(f"Đang phân tích {len(movies)} phim từ file JSON...")
         
         # Lấy danh sách file ảnh đã tải (không phân biệt định dạng)
         downloaded_files = set()
-        if os.path.exists(poster_dir):
+        if os.path.exists(image_dir):
             # Lấy tất cả các file ảnh với các định dạng phổ biến
             for ext in ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif', '*.bmp']:
-                pattern = os.path.join(poster_dir, ext)
+                pattern = os.path.join(image_dir, ext)
                 for file_path in glob.glob(pattern):
                     # Lấy tên file không có extension
                     filename = os.path.splitext(os.path.basename(file_path))[0]
                     downloaded_files.add(filename.lower())
         
-        print(f"[i] Tìm thấy {len(downloaded_files)} ảnh đã tải trong thư mục '{poster_dir}'")
+        print_info(f"Tìm thấy {len(downloaded_files)} ảnh đã tải trong thư mục '{image_dir}'")
         
         # Lọc các phim chưa tải
         undownloaded_movies = []
@@ -595,15 +608,15 @@ def filter_undownloaded_movies(json_file: str, poster_dir: str, output_file: str
         skipped_count = 0
         
         for movie in movies:
-            # Kiểm tra có slug và poster không
-            if 'slug' not in movie or 'poster' not in movie:
+            # Kiểm tra có slug và url không
+            if 'slug' not in movie or 'url' not in movie:
                 skipped_count += 1
                 continue
             
             slug = movie['slug']
-            poster = movie['poster']
+            url = movie['url']
             
-            if not slug or not poster:
+            if not slug or not url:
                 skipped_count += 1
                 continue
             
@@ -618,20 +631,22 @@ def filter_undownloaded_movies(json_file: str, poster_dir: str, output_file: str
             os.makedirs(os.path.dirname(output_file) if os.path.dirname(output_file) else '.', exist_ok=True)
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(undownloaded_movies, f, ensure_ascii=False, indent=2)
-            print(f"\n[+] Đã lưu {len(undownloaded_movies)} phim chưa tải vào: {output_file}")
+            console.print()
+            print_success(f"Đã lưu {len(undownloaded_movies)} phim chưa tải vào: {output_file}")
         else:
-            print("\n[i] Tất cả phim đã được tải!")
+            console.print()
+            print_info("Tất cả phim đã được tải!")
         
         return len(undownloaded_movies), downloaded_count, len(movies)
         
     except FileNotFoundError:
-        print(f"[-] Không tìm thấy file: {json_file}")
+        print_error(f"Không tìm thấy file: {json_file}")
         return 0, 0, 0
     except json.JSONDecodeError as e:
-        print(f"[-] Lỗi khi đọc file JSON: {e}")
+        print_error(f"Lỗi khi đọc file JSON: {e}")
         return 0, 0, 0
     except Exception as e:
-        print(f"[-] Lỗi: {e}")
+        print_error(f"Lỗi: {e}")
         return 0, 0, 0
 
 
@@ -689,7 +704,7 @@ def filter_movies_menu():
             return
     
     # Nhập thư mục chứa ảnh đã tải
-    poster_dir = Prompt.ask("\n[bold cyan]Nhập đường dẫn thư mục chứa ảnh[/bold cyan] [dim](Enter = 'poster')[/dim]", default="poster")
+    image_dir = Prompt.ask("\n[bold cyan]Nhập đường dẫn thư mục chứa ảnh[/bold cyan] [dim](Enter = 'images')[/dim]", default="images")
     
     # Nhập định dạng ảnh để kiểm tra
     image_format = Prompt.ask("\n[bold cyan]Định dạng ảnh để kiểm tra[/bold cyan] [dim](Enter = 'webp')[/dim]", default="webp").lower()
@@ -703,7 +718,7 @@ def filter_movies_menu():
         output_file = custom_output
     
     console.print("\n[bold yellow]⏳ Đang phân tích...[/bold yellow]")
-    undownloaded, downloaded, total = filter_undownloaded_movies(json_file, poster_dir, output_file, image_format)
+    undownloaded, downloaded, total = filter_undownloaded_movies(json_file, image_dir, output_file, image_format)
     
     # Display filter results
     result_table = Table(title="KẾT QUẢ LỌC", box=box.DOUBLE_EDGE, border_style="bright_cyan", show_header=False)
@@ -719,6 +734,108 @@ def filter_movies_menu():
     
     console.print()
     console.print(result_table)
+
+
+def show_user_guide():
+    """Hiển thị hướng dẫn sử dụng"""
+    console.print()
+    
+    # Title
+    guide_title = Panel(
+        Text("HƯỚNG DẪN SỬ DỤNG", style="bold bright_white", justify="center"),
+        box=box.DOUBLE,
+        border_style="bright_cyan"
+    )
+    console.print(guide_title)
+    console.print()
+    
+    # Tổng quan
+    console.print("[bold bright_cyan]TỔNG QUAN[/bold bright_cyan]")
+    console.print("Image Format Converter là công cụ chuyển đổi định dạng ảnh từ URL với các tính năng:")
+    console.print("  • Chuyển đổi từ URL đơn lẻ hoặc hàng loạt")
+    console.print("  • Hỗ trợ 8 định dạng: PNG, JPEG, JPG, WEBP, BMP, GIF, TIFF, ICO")
+    console.print("  • Xử lý đa luồng tăng tốc độ")
+    console.print("  • Lưu tiến trình và tiếp tục khi bị gián đoạn")
+    console.print()
+    
+    # Hướng dẫn chi tiết
+    features_table = Table(
+        title="CÁC CHỨC NĂNG",
+        box=box.ROUNDED,
+        border_style="bright_blue",
+        show_header=True,
+        header_style="bold bright_cyan"
+    )
+    features_table.add_column("Chức năng", style="bright_yellow", width=30)
+    features_table.add_column("Mô tả", style="white")
+    
+    features_table.add_row(
+        "1️⃣  Chuyển đổi từ một URL",
+        "Tải và chuyển đổi một ảnh từ URL.\nPhù hợp khi bạn chỉ cần xử lý 1 ảnh."
+    )
+    features_table.add_row(
+        "2️⃣  Chuyển đổi từ file URL",
+        "Xử lý hàng loạt URL từ file .txt\nMỗi dòng là một URL.\nHỗ trợ Resume khi gián đoạn."
+    )
+    features_table.add_row(
+        "3️⃣  Chuyển đổi từ JSON",
+        "Xử lý file JSON với format movies.\nCần có trường 'url' (URL) và 'slug' (tên file).\nTự động bỏ qua file đã tồn tại."
+    )
+    features_table.add_row(
+        "4️⃣  Lọc phim chưa tải",
+        "So sánh file JSON với thư mục ảnh.\nTạo file mới chỉ chứa phim chưa tải.\nTiết kiệm thời gian xử lý."
+    )
+    features_table.add_row(
+        "5️⃣  Xóa checkpoint",
+        "Xóa tiến trình đã lưu.\nDùng khi muốn bắt đầu lại từ đầu."
+    )
+    features_table.add_row(
+        "6️⃣  Hướng dẫn sử dụng",
+        "Hiển thị hướng dẫn này."
+    )
+    
+    console.print(features_table)
+    console.print()
+    
+    # Format file
+    console.print("[bold bright_cyan]CẤU TRÚC FILE[/bold bright_cyan]")
+    console.print()
+    console.print("[bold yellow]File URL (.txt):[/bold yellow]")
+    console.print("[dim]https://example.com/image1.jpg[/dim]")
+    console.print("[dim]https://example.com/image2.png[/dim]")
+    console.print("[dim]# Comment lines start with #[/dim]")
+    console.print("[dim]https://example.com/image3.webp[/dim]")
+    console.print()
+    
+    console.print("[bold yellow]File JSON (movies format):[/bold yellow]")
+    console.print('[dim][[/dim]')
+    console.print('[dim]  {"slug": "movie-name-1", "url": "https://..."},[/dim]')
+    console.print('[dim]  {"slug": "movie-name-2", "url": "https://..."}[/dim]')
+    console.print('[dim]][/dim]')
+    console.print()
+    
+    # Tips
+    console.print("[bold bright_cyan]💡 MẸO SỬ DỤNG[/bold bright_cyan]")
+    tips_table = Table(show_header=False, box=None, padding=(0, 2))
+    tips_table.add_column("Icon", style="bright_green", width=5)
+    tips_table.add_column("Tip", style="white")
+    
+    tips_table.add_row("✓", "Tăng số luồng (5-10) để xử lý nhanh hơn với nhiều ảnh")
+    tips_table.add_row("✓", "Dùng WEBP để giảm dung lượng tối đa (80% so với JPEG)")
+    tips_table.add_row("✓", "Nhấn Ctrl+C để dừng, tiến trình sẽ được lưu tự động")
+    tips_table.add_row("✓", "Chọn Resume để tiếp tục từ nơi đã dừng")
+    tips_table.add_row("✓", "Kiểm tra thư mục 'mock/' để xem file JSON mẫu")
+    
+    console.print(tips_table)
+    console.print()
+    
+    # Phím tắt
+    console.print("[bold bright_cyan]⌨️  PHÍM TẮT[/bold bright_cyan]")
+    console.print("  [bright_yellow]Ctrl+C[/bright_yellow]   : Dừng và lưu tiến trình")
+    console.print("  [bright_yellow]Enter[/bright_yellow]     : Sử dụng giá trị mặc định")
+    console.print()
+    
+    Prompt.ask("\n[bold bright_green]Nhấn Enter để quay lại menu[/bold bright_green]")
 
 
 def display_menu():
@@ -766,7 +883,8 @@ def display_menu():
     table.add_row("3.", "Chuyển đổi từ file JSON (movies format)")
     table.add_row("4.", "Lọc phim chưa tải từ JSON")
     table.add_row("5.", "Xóa checkpoint (tiến trình đã lưu)")
-    table.add_row("6.", "Thoát", style="bright_red")
+    table.add_row("6.", "Hướng dẫn sử dụng")
+    table.add_row("7.", "Thoát", style="bright_red")
     
     console.print(table)
     console.print()
@@ -1073,7 +1191,7 @@ def main():
     while True:
         try:
             display_menu()
-            choice = Prompt.ask("[bold]Chọn chức năng (1-6)[/bold]", choices=["1", "2", "3", "4", "5", "6"])
+            choice = Prompt.ask("[bold]Chọn chức năng (1-7)[/bold]", choices=["1", "2", "3", "4", "5", "6", "7"])
             
             if choice == '1':
                 process_single_url(converter)
@@ -1086,14 +1204,25 @@ def main():
             elif choice == '5':
                 clear_checkpoint_menu(converter)
             elif choice == '6':
-                console.print("\n[bold cyan]👋 Tạm biệt![/bold cyan]")
+                show_user_guide()
+            elif choice == '7':
+                try:
+                    console.print("\n[bold cyan]👋 Tạm biệt![/bold cyan]")
+                except:
+                    pass
                 sys.exit(0)
         
-        except KeyboardInterrupt:
-            console.print("\n\n[bold cyan]👋 Tạm biệt![/bold cyan]")
+        except (KeyboardInterrupt, EOFError):
+            try:
+                console.print("\n\n[bold cyan]👋 Tạm biệt![/bold cyan]")
+            except:
+                pass
             sys.exit(0)
         except Exception as e:
-            print_error(f"Đã xảy ra lỗi: {e}")
+            try:
+                print_error(f"Đã xảy ra lỗi: {e}")
+            except:
+                pass
 
 
 if __name__ == "__main__":
