@@ -845,12 +845,12 @@ def display_menu():
     # ASCII Art Logo với gradient màu
     logo = Text()
     logo_text = r"""
-██████╗ ██╗  ██╗ ██████╗ ██╗  ██╗ ██████╗  ██████╗ ██████╗ ██████╗ ██████╗ ███████╗
-██╔══██╗██║  ██║██╔═══██╗██║  ██║██╔═══██╗██╔════╝██╔════╝██╔═══██╗██╔══██╗██╔════╝
-██████╔╝███████║██║   ██║███████║██║   ██║██║     ██║     ██║   ██║██║  ██║█████╗  
-██╔═══╝ ██╔══██║██║   ██║██╔══██║██║   ██║██║     ██║     ██║   ██║██║  ██║██╔══╝  
-██║     ██║  ██║╚██████╔╝██║  ██║╚██████╔╝╚██████╗╚██████╗╚██████╔╝██████╔╝███████╗
-╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+██╗      ██████╗ ██╗  ██╗ ██████╗ ██╗  ██╗ ██████╗  ██████╗ ██████╗ ██████╗ ██████╗ ███████╗
+╚██╗     ██╔══██╗██║  ██║██╔═══██╗██║  ██║██╔═══██╗██╔════╝██╔════╝██╔═══██╗██╔══██╗██╔════╝
+ ╚██╗    ██████╔╝███████║██║   ██║███████║██║   ██║██║     ██║     ██║   ██║██║  ██║█████╗  
+ ██╔╝    ██╔═══╝ ██╔══██║██║   ██║██╔══██║██║   ██║██║     ██║     ██║   ██║██║  ██║██╔══╝  
+██╔╝     ██║     ██║  ██║╚██████╔╝██║  ██║╚██████╔╝╚██████╗╚██████╗╚██████╔╝██████╔╝███████╗
+╚═╝      ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
     """
 
 
@@ -870,7 +870,7 @@ def display_menu():
     console.print(logo)
     
     # Subtitle
-    subtitle = Text("IMAGE FORMAT CONVERTER", style="bold bright_white")
+    subtitle = Text("IMAGE FORMAT CONVERTER BY PHOHOCCODE", style="bold bright_white")
     console.print(Panel(subtitle, box=box.DOUBLE, border_style="bright_cyan"))
     
     # Menu với table
@@ -880,7 +880,7 @@ def display_menu():
     
     table.add_row("1.", "Chuyển đổi từ một URL")
     table.add_row("2.", "Chuyển đổi từ file chứa danh sách URL")
-    table.add_row("3.", "Chuyển đổi từ file JSON (movies format)")
+    table.add_row("3.", "Chuyển đổi từ file JSON")
     table.add_row("4.", "Lọc phim chưa tải từ JSON")
     table.add_row("5.", "Xóa checkpoint (tiến trình đã lưu)")
     table.add_row("6.", "Hướng dẫn sử dụng")
