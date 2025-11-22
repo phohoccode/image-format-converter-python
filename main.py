@@ -172,12 +172,18 @@ class ImageConverter:
             # Không in error để tránh rối progress bar
             return None
     
-    def save_image(self, image: Image.Image, output_path: str, output_format: str, silent: bool = False) -> bool:
+    def save_image(self, image: Image.Image, output_path: str, output_format: str, silent: bool = False, check_duplicate: bool = True) -> bool:
         """Lưu ảnh với định dạng mới"""
         try:
             output_format = output_format.upper()
             if output_format == 'JPG':
                 output_format = 'JPEG'
+            
+            # Kiểm tra file đã tồn tại
+            if check_duplicate and os.path.exists(output_path):
+                if not silent:
+                    print(f"[i] File đã tồn tại, bỏ qua: {output_path}")
+                return False
             
             # Tạo thư mục nếu chưa tồn tại
             os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
@@ -208,10 +214,28 @@ class ImageConverter:
                 print(f"[-] Lỗi khi lưu ảnh: {e}")
             return False
     
-    def _worker_process_url(self, idx: int, url: str, output_format: str, output_dir: str, custom_name: Optional[str] = None) -> tuple[int, bool]:
-        """Worker function để xử lý URL trong thread pool"""
+    def _worker_process_url(self, idx: int, url: str, output_format: str, output_dir: str, custom_name: Optional[str] = None) -> tuple[int, int]:
+        """Worker function để xử lý URL trong thread pool
+        Returns: (idx, status) where status: 1=success, 0=fail, -1=skip
+        """
+        # Tính tên file trước để kiểm tra
+        if custom_name:
+            filename = f"{custom_name}.{output_format.lower()}"
+        else:
+            url_path = url.split('?')[0]
+            original_name = os.path.splitext(os.path.basename(url_path))[0]
+            if not original_name:
+                original_name = f"image_{hash(url) % 10000}"
+            filename = f"{original_name}.{output_format.lower()}"
+        
+        output_path = os.path.join(output_dir, filename)
+        
+        # Kiểm tra file đã tồn tại
+        if os.path.exists(output_path):
+            return idx, -1  # Skip
+        
         success = self.process_url(url, output_format, output_dir, custom_name, silent=True)
-        return idx, success
+        return idx, 1 if success else 0
     
     def _worker_process_movie(self, idx: int, movie: dict, output_format: str, output_dir: str) -> tuple[int, int]:
         """Worker function để xử lý movie trong thread pool
@@ -226,6 +250,12 @@ class ImageConverter:
         
         # Bỏ qua nếu URL hoặc slug trống
         if not poster_url or not slug:
+            return idx, -1  # Skip
+        
+        # Kiểm tra file đã tồn tại
+        filename = f"{slug}.{output_format.lower()}"
+        output_path = os.path.join(output_dir, filename)
+        if os.path.exists(output_path):
             return idx, -1  # Skip
         
         # Xử lý chuyển đổi
@@ -312,8 +342,31 @@ class ImageConverter:
             if start_index > 0:
                 print(f"[i] Đã xử lý: {start_index} ảnh")
             
-            success_count = len([i for i in processed_indices if i >= 0])
-            fail_count = len([i for i in processed_indices if i < 0])
+            # Constants cho status
+            STATUS_SUCCESS = 1
+            STATUS_FAIL = 0
+            STATUS_SKIP = -1
+            
+            # Đếm từ processed_results
+            success_count = 0
+            fail_count = 0
+            skipped_count = 0
+            
+            for item in processed_indices:
+                if isinstance(item, (list, tuple)):
+                    _, status = item
+                    if status == STATUS_SUCCESS:
+                        success_count += 1
+                    elif status == STATUS_FAIL:
+                        fail_count += 1
+                    else:
+                        skipped_count += 1
+                else:
+                    # Format cũ để tương thích
+                    if item >= 0:
+                        success_count += 1
+                    else:
+                        fail_count += 1
             
             executor = None
             try:
@@ -335,16 +388,17 @@ class ImageConverter:
                         
                         # Xử lý kết quả khi hoàn thành
                         for future in as_completed(futures):
-                            task_idx, success = future.result()
+                            task_idx, status = future.result()
                             
                             # ✅ Thread-safe append
                             with self.checkpoint_lock:
-                                if success:
+                                processed_indices.append([task_idx, status])
+                                if status == STATUS_SUCCESS:
                                     success_count += 1
-                                    processed_indices.append(task_idx)
-                                else:
+                                elif status == STATUS_FAIL:
                                     fail_count += 1
-                                    processed_indices.append(-task_idx)
+                                else:  # STATUS_SKIP
+                                    skipped_count += 1
                             
                             pbar.update(1)
                         
@@ -363,19 +417,19 @@ class ImageConverter:
                 self.save_checkpoint(file_path, processed_indices, output_format, output_dir)
                 print(f"[+] Đã lưu tiến trình: {len(processed_indices)}/{len(urls)} ảnh")
                 print(f"[i] Chạy lại và chọn 'Resume' để tiếp tục")
-                return success_count, fail_count
+                return success_count, fail_count, skipped_count
             finally:
                 # ✅ Đảm bảo executor được đóng
                 if executor:
                     executor.shutdown(wait=False)
             
-            return success_count, fail_count
+            return success_count, fail_count, skipped_count
         except FileNotFoundError:
             print(f"[-] Không tìm thấy file: {file_path}")
-            return 0, 0
+            return 0, 0, 0
         except Exception as e:
             print(f"[-] Lỗi khi đọc file: {e}")
-            return 0, 0
+            return 0, 0, 0
     
     def process_movies_json(self, file_path: str, output_format: str, output_dir: str, resume: bool = False, num_workers: int = None) -> tuple:
         """Xử lý file JSON với định dạng movies (slug làm tên, poster làm URL) với đa luồng"""
@@ -583,6 +637,7 @@ def filter_undownloaded_movies(json_file: str, poster_dir: str, output_file: str
 
 def filter_movies_menu():
     """Menu lọc phim chưa tải"""
+    console.print()
     # Kiểm tra thư mục mock và hiển thị các file JSON có sẵn
     mock_dir = "mock"
     json_files = []
@@ -592,6 +647,7 @@ def filter_movies_menu():
     
     if json_files:
         print_info("Tìm thấy các file JSON trong thư mục mock:")
+        console.print()
         
         files_table = Table(show_header=False, box=box.SIMPLE, border_style="cyan")
         files_table.add_column("#", style="bright_cyan", width=6)
@@ -673,12 +729,14 @@ def display_menu():
     logo = Text()
     logo_text = r"""
 ██████╗ ██╗  ██╗ ██████╗ ██╗  ██╗ ██████╗  ██████╗ ██████╗ ██████╗ ██████╗ ███████╗
-██╔══██╗██║  ██║██╔═══██╗██║  ██║██╔═══██╗██╔════╝██╔═══██╗██╔══██╗██╔══██╗██╔════╝
-██████╔╝███████║██║   ██║███████║██║   ██║██║     ██║   ██║██║  ██║██████╔╝█████╗  
-██╔═══╝ ██╔══██║██║   ██║██╔══██║██║   ██║██║     ██║   ██║██║  ██║██╔══██╗██╔══╝  
-██║     ██║  ██║╚██████╔╝██║  ██║╚██████╔╝╚██████╗╚██████╔╝██████╔╝██████╔╝███████╗
+██╔══██╗██║  ██║██╔═══██╗██║  ██║██╔═══██╗██╔════╝██╔════╝██╔═══██╗██╔══██╗██╔════╝
+██████╔╝███████║██║   ██║███████║██║   ██║██║     ██║     ██║   ██║██║  ██║█████╗  
+██╔═══╝ ██╔══██║██║   ██║██╔══██║██║   ██║██║     ██║     ██║   ██║██║  ██║██╔══╝  
+██║     ██║  ██║╚██████╔╝██║  ██║╚██████╔╝╚██████╗╚██████╗╚██████╔╝██████╔╝███████╗
 ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
     """
+
+
     
     # Tạo gradient từ cyan sang magenta
     lines = logo_text.strip().split('\n')
@@ -760,9 +818,17 @@ def get_output_directory() -> str:
 
 def process_single_url(converter: ImageConverter):
     """Xử lý chuyển đổi từ một URL"""
-    url = Prompt.ask("\n[bold cyan]Nhập URL ảnh[/bold cyan]")
+    console.print()
+    url = Prompt.ask("[bold cyan]Nhập URL ảnh[/bold cyan]")
     if not url:
         print_error("URL không hợp lệ!")
+        return
+    
+    # Validate URL format
+    if not converter.validate_url(url):
+        console.print()
+        print_error(f"URL không hợp lệ: {url}")
+        print_info("URL phải bắt đầu với http:// hoặc https://")
         return
     
     output_format = get_output_format(converter)
@@ -773,18 +839,24 @@ def process_single_url(converter: ImageConverter):
     
     console.print("\n[bold yellow]⏳ Bắt đầu chuyển đổi...[/bold yellow]")
     if converter.process_url(url, output_format, output_dir, custom_name):
+        console.print()
         print_success("Chuyển đổi thành công!")
+        console.print()
     else:
+        console.print()
         print_error("Chuyển đổi thất bại!")
+        console.print()
 
 
 def process_file_urls(converter: ImageConverter):
     """Xử lý chuyển đổi từ file chứa danh sách URL"""
+    console.print()
     # Kiểm tra checkpoint
     resume = False
     checkpoint = converter.load_checkpoint()
     if checkpoint:
         print_info("Phát hiện tiến trình chưa hoàn thành!")
+        console.print()
         checkpoint_table = Table(show_header=False, box=box.SIMPLE, border_style="cyan")
         checkpoint_table.add_column("Key", style="cyan")
         checkpoint_table.add_column("Value", style="white")
@@ -801,12 +873,14 @@ def process_file_urls(converter: ImageConverter):
             converter.clear_checkpoint()
     
     if not resume:
-        file_path = Prompt.ask("\n[bold cyan]Nhập đường dẫn file chứa URL[/bold cyan]")
+        file_path = Prompt.ask("[bold cyan]Nhập đường dẫn file chứa URL[/bold cyan]")
         if not file_path:
+            console.print()
             print_error("Đường dẫn file không hợp lệ!")
             return
         
         if not os.path.exists(file_path):
+            console.print()
             print_error(f"File không tồn tại: {file_path}")
             return
         
@@ -831,17 +905,19 @@ def process_file_urls(converter: ImageConverter):
             print_warning("Giá trị không hợp lệ, sử dụng mặc định")
     
     console.print("\n[bold yellow]⏳ Bắt đầu chuyển đổi...[/bold yellow]")
-    success, fail = converter.process_urls_from_file(file_path, output_format, output_dir, resume=resume, num_workers=num_workers)
+    success, fail, skipped = converter.process_urls_from_file(file_path, output_format, output_dir, resume=resume, num_workers=num_workers)
     
     console.print()
-    print_result_table(success, fail)
+    print_result_table(success, fail, skipped)
 
 
 def clear_checkpoint_menu(converter: ImageConverter):
     """Xóa checkpoint đã lưu"""
+    console.print()
     checkpoint = converter.load_checkpoint()
     if not checkpoint:
         print_info("Không có checkpoint nào được lưu.")
+        console.print()
         return
     
     # Display checkpoint info
@@ -859,18 +935,24 @@ def clear_checkpoint_menu(converter: ImageConverter):
     
     if Confirm.ask("\n[bold yellow]Xác nhận xóa checkpoint?[/bold yellow]"):
         converter.clear_checkpoint()
+        console.print()
         print_success("Đã xóa checkpoint thành công!")
+        console.print()
     else:
+        console.print()
         print_warning("Đã hủy xóa checkpoint.")
+        console.print()
 
 
 def process_movies_json(converter: ImageConverter):
     """Xử lý chuyển đổi từ file JSON movies"""
+    console.print()
     # Kiểm tra checkpoint
     resume = False
     checkpoint = converter.load_checkpoint()
     if checkpoint:
         print_info("Phát hiện tiến trình chưa hoàn thành!")
+        console.print()
         checkpoint_table = Table(show_header=False, box=box.SIMPLE, border_style="cyan")
         checkpoint_table.add_column("Key", style="cyan")
         checkpoint_table.add_column("Value", style="white")
@@ -896,6 +978,7 @@ def process_movies_json(converter: ImageConverter):
             
             if json_files:
                 print_info("Tìm thấy các file JSON trong thư mục mock:")
+                console.print()
                 
                 files_table = Table(show_header=False, box=box.SIMPLE, border_style="cyan")
                 files_table.add_column("#", style="bright_cyan", width=6)
